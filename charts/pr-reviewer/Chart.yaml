@@ -1,0 +1,13 @@
+apiVersion: v2
+name: pr-reviewer
+description: Self-hosted PR review platform using rgctl and opencode on OpenShift
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - pr-review
+  - rgctl
+  - opencode
+  - openshift
+maintainers:
+  - name: lightwell

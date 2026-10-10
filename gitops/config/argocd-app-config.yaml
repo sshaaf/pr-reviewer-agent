@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pr-reviewer-config
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/lightwell/pr-reviewer
+    targetRevision: main
+    path: gitops/config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pr-reviewer
+  syncPolicy:
+    automated:
+      prune: false      # don't delete users/repos on config removal
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

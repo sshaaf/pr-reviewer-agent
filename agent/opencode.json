@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "agents": {
+    "pr-reviewer": {
+      "description": "Automated PR reviewer using rgctl graph analysis",
+      "model": "anthropic/claude-sonnet-4-5"
+    }
+  }
+}

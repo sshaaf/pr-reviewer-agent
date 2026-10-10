@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pr-reviewer-webapp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pr-reviewer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webapp
+spec:
+  replicas: {{ .Values.webApp.replicaCount }}
+  selector:
+    matchLabels:
+      app: pr-reviewer-webapp
+  template:
+    metadata:
+      labels:
+        app: pr-reviewer-webapp
+        {{- include "pr-reviewer.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: pr-reviewer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 0
+        fsGroup: 0
+      containers:
+        - name: webapp
+          image: "{{ .Values.webApp.image.repository }}:{{ .Values.webApp.image.tag }}"
+          imagePullPolicy: {{ .Values.webApp.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: AGENT_IMAGE
+              value: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
+            - name: STORAGE_CLASS
+              value: {{ .Values.reindex.storageClass | quote }}
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-admin
+                  key: email
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-admin
+                  key: password
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-pg-credentials
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.encryptionKeySecret | quote }}
+                  key: key
+            - name: OPENCODE_AGENT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.opencodeAgentPasswordSecret | quote }}
+                  key: password
+            - name: REVIEW_UPSTREAM_DEPTH
+              value: {{ .Values.reviewDefaults.upstreamDepth | quote }}
+            - name: REVIEW_DOWNSTREAM_DEPTH
+              value: {{ .Values.reviewDefaults.downstreamDepth | quote }}
+          resources:
+            {{- toYaml .Values.webApp.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30

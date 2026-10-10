@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum RepoStatus {
+  indexing
+  ready
+  error
+}
+
+enum OutputMode {
+  comment
+  check_run
+  both
+}
+
+enum ReviewStatus {
+  pending
+  running
+  complete
+  error
+}
+
+enum Provider {
+  github
+  gitlab
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(user)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  apiKeys ApiKey[]
+  repos   Repo[]
+
+  @@map("users")
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  keyHash   String    @unique @map("key_hash")
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model App {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  provider         Provider
+  appId            String   @map("app_id")
+  privateKeyEnc    String   @map("private_key_enc")
+  webhookSecretEnc String   @map("webhook_secret_enc")
+  createdBy        String   @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  repos Repo[]
+
+  @@map("apps")
+}
+
+model Repo {
+  id                      String     @id @default(cuid())
+  ownerId                 String     @map("owner_id")
+  appId                   String     @map("app_id")
+  repoUrl                 String     @map("repo_url")
+  status                  RepoStatus @default(indexing)
+  lastIndexedAt           DateTime?  @map("last_indexed_at")
+  indexError              String?    @map("index_error")
+  artifactLocation        String?    @map("artifact_location")
+  discoverJobName         String?    @map("discover_job_name")
+  opencodeDeploymentName  String?    @map("opencode_deployment_name")
+  opencodeServiceUrl      String?    @map("opencode_service_url")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  owner   User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  app     App        @relation(fields: [appId], references: [id])
+  config  RepoConfig?
+  policy  RepoPolicy?
+  reviews Review[]
+
+  @@map("repos")
+}
+
+model RepoConfig {
+  id               String     @id @default(cuid())
+  repoId           String     @unique @map("repo_id")
+  checks           String[]   @default(["paths", "blast_radius", "policy"])
+  upstreamDepth    Int        @default(2) @map("upstream_depth")
+  downstreamDepth  Int        @default(1) @map("downstream_depth")
+  fanout           Int        @default(10)
+  outputMode       OutputMode @default(comment) @map("output_mode")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  repo Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@map("repo_configs")
+}
+
+model RepoPolicy {
+  id         String   @id @default(cuid())
+  repoId     String   @unique @map("repo_id")
+  policyJson String   @map("policy_json")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  repo Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@map("repo_policies")
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  repoId    String       @map("repo_id")
+  prNumber  Int          @map("pr_number")
+  sessionId String?      @map("session_id")
+  status    ReviewStatus @default(pending)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  repo Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}

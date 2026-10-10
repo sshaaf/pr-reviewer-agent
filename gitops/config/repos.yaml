@@ -1,0 +1,37 @@
+# Declarative repo list — provisioned by the seed Job on every Argo CD sync.
+# The seed Job treats 409 (already registered) as success — safe to re-run.
+#
+# Schema:
+#   owner:      string (required) — email of the owning user (must exist in users.yaml or DB)
+#   repo_url:   string (required) — full HTTPS URL of the repository
+#   app:        string (required) — name of a registered GitHub/GitLab App (admin must register first)
+#   config:     object (optional) — review behaviour overrides
+#     checks:           array  — which checks to run: paths, blast_radius, policy
+#     upstream_depth:   int    — reverse call hops (default 2)
+#     downstream_depth: int    — forward call hops (default 1)
+#     fanout:           int    — fan-out cap per hop (default 10)
+#     output_mode:      string — comment | check_run | both
+repos:
+  - owner: alice@acme.com
+    repo_url: https://github.com/acme/payments
+    app: github-acme
+    config:
+      checks: [paths, blast_radius, policy]
+      upstream_depth: 2
+      downstream_depth: 1
+      output_mode: comment
+
+  - owner: alice@acme.com
+    repo_url: https://github.com/acme/auth-service
+    app: github-acme
+    config:
+      checks: [paths, blast_radius]
+      output_mode: check_run
+
+  - owner: bob@acme.com
+    repo_url: https://gitlab.com/acme/legacy-api
+    app: gitlab-acme
+    config:
+      checks: [paths, policy]
+      upstream_depth: 3
+      output_mode: comment

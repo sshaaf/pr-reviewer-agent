@@ -1,0 +1,26 @@
+{{- if .Values.reindex.cronEnabled }}
+# Nightly re-discover CronJob placeholder.
+# The webapp creates per-repo CronJobs at runtime via the K8s API.
+# This ConfigMap carries the schedule for the webapp to use.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pr-reviewer-reindex-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pr-reviewer.labels" . | nindent 4 }}
+data:
+  enabled: "true"
+  schedule: {{ .Values.reindex.schedule | quote }}
+{{- else }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pr-reviewer-reindex-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pr-reviewer.labels" . | nindent 4 }}
+data:
+  enabled: "false"
+  schedule: {{ .Values.reindex.schedule | quote }}
+{{- end }}
