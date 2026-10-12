@@ -1,0 +1,21 @@
+# Optional: expose OpenCode for debugging. Not required for in-cluster trigger→agent
+# (sidecar uses 127.0.0.1:4096). Delete or omit in production if undesired.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: pr-reviewer-agent
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+    app.kubernetes.io/component: agent
+spec:
+  to:
+    kind: Service
+    name: pr-reviewer-agent
+    weight: 100
+  port:
+    targetPort: opencode
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

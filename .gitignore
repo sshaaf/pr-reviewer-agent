@@ -1,0 +1,39 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+
+.claude
+.cursor
+.opencode
+.kilo
+openspec/
+
+# Node (local tooling only)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+agent/e2e-runs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# CI artifacts
+dist/

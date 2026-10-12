@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Smoke-test the pr-reviewer-agent image.
 # Verifies: baked config present, rgctl available, skill present, opencode health API returns healthy.
+# Loads agent/.env when present (see agent/.env.example).
 set -euo pipefail
 
-IMAGE="${1:-pr-reviewer-agent:latest}"
-PASSWORD="${SMOKE_TEST_PASSWORD:-smoke-secret}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=load-env.sh
+. "${SCRIPT_DIR}/load-env.sh"
+
+IMAGE="${1:-${IMAGE:-pr-reviewer-agent:latest}}"
+PASSWORD="${SMOKE_TEST_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-smoke-secret}}"
 CONTAINER_NAME="agent-smoke-${RANDOM}"
 HEALTH_URL="http://127.0.0.1:4096/global/health"
 MAX_WAIT="${SMOKE_TEST_TIMEOUT_SECONDS:-60}"
@@ -23,7 +28,9 @@ docker run --rm --entrypoint sh "${IMAGE}" -c '
 echo "Starting container ${CONTAINER_NAME}..."
 docker run -d --name "${CONTAINER_NAME}" \
   -e "OPENCODE_SERVER_PASSWORD=${PASSWORD}" \
-  -e "ANTHROPIC_API_KEY=dummy-for-smoke" \
+  -e "LITELLM_BASE_URL=${LITELLM_BASE_URL:-https://litemaas.rhoai.rh-aiservices-bu.com/v1}" \
+  -e "LITELLM_API_KEY=${LITELLM_API_KEY:-}" \
+  -e "LITELLM_MODEL=${LITELLM_MODEL:-Qwen3.6-35B-A3B}" \
   -p 4096:4096 \
   "${IMAGE}" >/dev/null
 
@@ -31,7 +38,7 @@ echo "Waiting up to ${MAX_WAIT}s for ${HEALTH_URL}..."
 deadline=$((SECONDS + MAX_WAIT))
 healthy=0
 while (( SECONDS < deadline )); do
-  if response="$(curl -sf -u "opencode:${PASSWORD}" "${HEALTH_URL}" 2>/dev/null)"; then
+  if response="$(curl --max-time 5 -sf -u "opencode:${PASSWORD}" "${HEALTH_URL}" 2>/dev/null)"; then
     if echo "${response}" | grep -q '"healthy"[[:space:]]*:[[:space:]]*true'; then
       echo "Health check passed: ${response}"
       healthy=1

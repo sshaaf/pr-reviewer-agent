@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pr-reviewer-config
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+data:
+  # In-cluster GitLab webservice (adjust to your GitLab Operator/Helm Service).
+  GITLAB_URL: "http://gitlab-webservice-default.gitlab.svc:8181"
+  RGCTL_WITH_LIMITS: "max-mem-mb=1536,threads=1"
+  REPO_PATH: "/workspace/repo"
+  WORKSPACE: "/workspace/repo"
+  AGENT_URL: "http://127.0.0.1:4096"
+  REVIEW_UPSTREAM_DEPTH: "2"
+  REVIEW_DOWNSTREAM_DEPTH: "1"
+  REVIEW_FANOUT: "5"
+  REVIEW_MAX_SYMBOLS: "25"
+  DEBOUNCE_SECONDS: "60"

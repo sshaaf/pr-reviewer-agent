@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pr-reviewer-agent
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    app.kubernetes.io/name: pr-reviewer
+  ports:
+    - name: opencode
+      port: 4096
+      targetPort: opencode
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pr-reviewer-trigger
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+    app.kubernetes.io/component: trigger
+spec:
+  selector:
+    app.kubernetes.io/name: pr-reviewer
+  ports:
+    - name: webhook
+      port: 8080
+      targetPort: webhook

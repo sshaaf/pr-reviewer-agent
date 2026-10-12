@@ -8,7 +8,7 @@ on:
       - ".github/workflows/build-agent.yml"
 
 env:
-  IMAGE: quay.io/lightwell/pr-reviewer-agent
+  IMAGE: quay.io/sshaaf/pr-reviewer-agent
 
 jobs:
   build-and-smoke-test:
@@ -24,11 +24,14 @@ jobs:
         with:
           context: .
           file: agent/Dockerfile
+          platforms: linux/amd64
           push: false
           load: true
           tags: ${{ env.IMAGE }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
 
       - name: Smoke test
         run: |
@@ -36,6 +39,24 @@ jobs:
           SMOKE_TEST_PASSWORD=ci-smoke agent/scripts/smoke-test.sh ${{ env.IMAGE }}:ci
         env:
           SMOKE_TEST_TIMEOUT_SECONDS: 90
+
+      - name: E2E coolstore review smoke
+        if: ${{ secrets.LITELLM_API_KEY != '' }}
+        run: |
+          chmod +x agent/scripts/e2e-review-smoke.sh
+          # rgctl needed on runner to seed .rgctl-base
+          # Host rgctl for seeding .rgctl-base (glibc ubuntu runner)
+          curl -fsSL -o /tmp/rgctl.tgz \
+            "https://github.com/sshaaf/rgctl/releases/download/v0.4.19/rgctl-0.4.19-x86_64-unknown-linux-gnu.tar.gz"
+          sudo tar -C /usr/local/bin -xzf /tmp/rgctl.tgz rgctl
+
+          SMOKE_TEST_PASSWORD=ci-e2e \
+            LITELLM_API_KEY="${{ secrets.LITELLM_API_KEY }}" \
+            LITELLM_BASE_URL="${{ secrets.LITELLM_BASE_URL }}" \
+            LITELLM_MODEL="${{ secrets.LITELLM_MODEL }}" \
+            agent/scripts/e2e-review-smoke.sh ${{ env.IMAGE }}:ci
+        env:
+          E2E_TIMEOUT_SECONDS: 900
 
       - name: Log in to Quay.io
         if: success()
@@ -51,6 +72,7 @@ jobs:
         with:
           context: .
           file: agent/Dockerfile
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.IMAGE }}:latest

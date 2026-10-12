@@ -1,0 +1,21 @@
+# OpenShift Route for GitLab → webhook (GitLab must reach this URL).
+# Adjust host or leave empty for an auto-generated *.apps host.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: pr-reviewer-trigger
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+    app.kubernetes.io/component: trigger
+spec:
+  to:
+    kind: Service
+    name: pr-reviewer-trigger
+    weight: 100
+  port:
+    targetPort: webhook
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

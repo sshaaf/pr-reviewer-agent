@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pr-reviewer
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pr-reviewer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pr-reviewer
+    spec:
+      serviceAccountName: pr-reviewer
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: workspace
+          emptyDir: {}
+      containers:
+        - name: agent
+          image: quay.io/sshaaf/pr-reviewer-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - name: opencode
+              containerPort: 4096
+          envFrom:
+            - secretRef:
+                name: pr-reviewer-secrets
+            - configMapRef:
+                name: pr-reviewer-config
+          env:
+            - name: OPENCODE_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: OPENCODE_SERVER_PASSWORD
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: LITELLM_API_KEY
+            - name: LITELLM_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: LITELLM_BASE_URL
+            - name: LITELLM_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: LITELLM_MODEL
+                  optional: true
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            tcpSocket:
+              port: opencode
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsUser: 1001
+            runAsGroup: 0
+
+        - name: trigger
+          image: quay.io/sshaaf/pr-reviewer-trigger:latest
+          imagePullPolicy: Always
+          ports:
+            - name: webhook
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: pr-reviewer-secrets
+            - configMapRef:
+                name: pr-reviewer-config
+          env:
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: GITLAB_TOKEN
+            - name: GITLAB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: GITLAB_WEBHOOK_SECRET
+            - name: OPENCODE_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: OPENCODE_SERVER_PASSWORD
+            - name: AGENT_URL
+              value: "http://127.0.0.1:4096"
+            - name: WORKSPACE
+              value: "/workspace/repo"
+            - name: REVIEW_WORKSPACE_SCRIPT
+              value: "/app/scripts/review-workspace.sh"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsUser: 1001
+            runAsGroup: 0
