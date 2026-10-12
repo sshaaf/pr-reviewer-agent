@@ -13,9 +13,10 @@ Thumbs.db
 
 .claude
 .cursor
-.opencode
+# Ignore tool/config dirs at repo root only (keep agent/.opencode skills tracked)
+/.opencode
 .kilo
-openspec/
+/openspec/
 
 # Node (local tooling only)
 node_modules/
