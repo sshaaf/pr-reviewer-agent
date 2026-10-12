@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pr-reviewer-opencode-config
+  namespace: pr-reviewer
+  labels:
+    app.kubernetes.io/name: pr-reviewer
+data:
+  opencode.json: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "litellm/Qwen3.6-35B-A3B",
+      "provider": {
+        "litellm": {
+          "npm": "@ai-sdk/openai-compatible",
+          "name": "LiteLLM (OpenAI-compatible)",
+          "options": {
+            "baseURL": "{env:LITELLM_BASE_URL}",
+            "apiKey": "{env:LITELLM_API_KEY}"
+          },
+          "models": {
+            "Qwen3.6-35B-A3B": {
+              "name": "Qwen3.6-35B-A3B"
+            }
+          }
+        }
+      },
+      "permission": {
+        "bash": "allow",
+        "edit": "allow",
+        "external_directory": "allow",
+        "read": "allow",
+        "write": "allow"
+      },
+      "agents": {
+        "pr-reviewer": {
+          "description": "Automated PR reviewer using rgctl graph analysis",
+          "model": "litellm/Qwen3.6-35B-A3B"
+        }
+      }
+    }

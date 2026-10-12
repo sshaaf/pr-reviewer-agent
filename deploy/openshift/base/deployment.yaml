@@ -16,13 +16,13 @@ spec:
         app.kubernetes.io/name: pr-reviewer
     spec:
       serviceAccountName: pr-reviewer
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+      # Let OpenShift SCC inject UID/fsGroup (restricted-v2 / anyuid).
       volumes:
         - name: workspace
           emptyDir: {}
+        - name: opencode-config
+          configMap:
+            name: pr-reviewer-opencode-config
       containers:
         - name: agent
           image: quay.io/sshaaf/pr-reviewer-agent:latest
@@ -60,6 +60,9 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+            - name: opencode-config
+              mountPath: /app/opencode.json
+              subPath: opencode.json
           resources:
             requests:
               cpu: 250m
@@ -76,8 +79,6 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-            runAsUser: 1001
-            runAsGroup: 0
 
         - name: trigger
           image: quay.io/sshaaf/pr-reviewer-trigger:latest
@@ -118,10 +119,10 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 512Mi
             limits:
-              cpu: "1"
-              memory: 1Gi
+              cpu: "2"
+              memory: 2Gi
           readinessProbe:
             httpGet:
               path: /healthz
@@ -132,5 +133,3 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-            runAsUser: 1001
-            runAsGroup: 0

@@ -10,31 +10,55 @@ SOURCE_BRANCH="${SOURCE_BRANCH:?SOURCE_BRANCH required}"
 HEAD_SHA="${HEAD_SHA:-}"
 WORKSPACE="${WORKSPACE:-/workspace/repo}"
 LIMITS_SPEC="${RGCTL_WITH_LIMITS:-max-mem-mb=1536,threads=1}"
+# Prefer in-cluster GitLab Service for clone (pods often cannot use the external Route auth UX).
+GITLAB_URL="${GITLAB_URL:-}"
 
 log() { printf '[review-workspace] %s\n' "$*"; }
 
-# Authenticated HTTPS clone URL (GitLab project access token as oauth2 user).
-auth_url() {
-  local url="$1"
-  if [[ "${url}" =~ ^https?:// ]]; then
-    local proto rest
-    proto="${url%%://*}"
-    rest="${url#*://}"
-    printf '%s://oauth2:%s@%s' "${proto}" "${GITLAB_TOKEN}" "${rest}"
-  else
-    printf '%s' "${url}"
-  fi
+urlencode() {
+  python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
 }
+
+# Clean transport URL (no credentials). Prefer GITLAB_URL + path from REPO_URL.
+transport_url() {
+  if [ -n "${GITLAB_URL}" ]; then
+    local path
+    path="${REPO_URL#*://}"
+    path="/${path#*/}"
+    printf '%s%s' "${GITLAB_URL%/}" "${path}"
+    return
+  fi
+  printf '%s' "${REPO_URL}"
+}
+
+# Authenticated clone/fetch URL (oauth2 PAT). Keep until all network git ops finish.
+auth_url() {
+  local transport token_enc proto rest
+  transport="$(transport_url)"
+  token_enc="$(urlencode "${GITLAB_TOKEN}")"
+  if [[ "${transport}" =~ ^https?:// ]]; then
+    proto="${transport%%://*}"
+    rest="${transport#*://}"
+    printf '%s://oauth2:%s@%s' "${proto}" "${token_enc}" "${rest}"
+    return
+  fi
+  printf '%s' "${transport}"
+}
+
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/bin/true
+
+TRANSPORT="$(transport_url)"
+CLONE_URL="$(auth_url)"
 
 rm -rf "${WORKSPACE}"
 mkdir -p "$(dirname "${WORKSPACE}")"
-CLONE_URL="$(auth_url "${REPO_URL}")"
 
-log "Cloning ${REPO_URL} → ${WORKSPACE}"
+log "Cloning ${REPO_URL} (via ${TRANSPORT}) → ${WORKSPACE}"
 git clone --depth 50 "${CLONE_URL}" "${WORKSPACE}"
 cd "${WORKSPACE}"
-# Scrub token from remote URL in the worktree
-git remote set-url origin "${REPO_URL}"
+# Keep authenticated remote until fetch/worktree network ops complete
+git remote set-url origin "${CLONE_URL}"
 
 git fetch origin "${TARGET_BRANCH}" "${SOURCE_BRANCH}" 2>/dev/null \
   || git fetch origin "${TARGET_BRANCH}"
@@ -67,6 +91,9 @@ fi
 
 test -f ".rgctl-base/.rgctl/graph.snapshot.bin" \
   || { log "ERROR: base artifact missing"; exit 1; }
+
+# Scrub token from .git/config before handing workspace to the agent
+git remote set-url origin "${REPO_URL}"
 
 HEAD_REF="$(git rev-parse HEAD)"
 META_DIR="$(dirname "${WORKSPACE}")"

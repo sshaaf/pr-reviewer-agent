@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pr-reviewer-smoke
+resources:
+  - ../../base
+images:
+  - name: quay.io/sshaaf/pr-reviewer-trigger
+    newName: image-registry.openshift-image-registry.svc:5000/pr-reviewer-smoke/pr-reviewer-trigger
+    newTag: latest
+patches:
+  - target:
+      kind: Namespace
+      name: pr-reviewer
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: pr-reviewer-smoke
+  - target:
+      kind: ConfigMap
+      name: pr-reviewer-config
+    patch: |-
+      - op: replace
+        path: /data/GITLAB_URL
+        value: http://gitlab.gitlab.svc
