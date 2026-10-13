@@ -4,6 +4,8 @@ Runs OpenCode (`pr-reviewer-agent`) and a GitLab MR webhook trigger as **two con
 
 **Live demos / workshops:** follow **[docs/demo-runbook.md](../../docs/demo-runbook.md)** (smoke overlay, timed script, recovery). This README is the ops install sheet.
 
+**GitHub App** (auto-review + `@mention`, read-only): **[docs/github-app.md](../../docs/github-app.md)** and overlay `deploy/openshift/overlays/github` (`TRIGGER_PROVIDER=github`, webhook `POST /hooks/github`).
+
 ```
 GitLab (on OpenShift) --webhook--> Route --> trigger:8080
                                               | clone + rgctl discover
@@ -97,6 +99,8 @@ oc -n pr-reviewer exec deploy/pr-reviewer -c agent -- printenv RGCTL_WITH_LIMITS
 ```
 
 **End-to-end:** open or update an MR on a watched project → trigger logs show clone/discover/`prompt_async` → MR gains a notes comment with the four-section review; workspace contains `IMPACT_REPORT.md` under `/workspace/repo`.
+
+If the cloned repo has root `policy.json` or `.rgctl/policy.json`, the trigger loads it into Input `policy_json` and the skill runs `rgctl review check --bisect` (Policy Findings in the Impact Report). Architecture markdown such as `docs/architecture.md` is consulted for soft Guidelines Concerns only.
 
 ```bash
 oc -n pr-reviewer logs -f deploy/pr-reviewer -c trigger

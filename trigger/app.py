@@ -151,6 +151,22 @@ def wait_agent_healthy(timeout: int = 120) -> None:
     raise RuntimeError("agent health check timed out")
 
 
+def load_repo_policy_json(workspace: str) -> str | None:
+    """Return policy file contents from conventional repo paths, or None."""
+    root = Path(workspace)
+    for rel in (".rgctl/policy.json", "policy.json"):
+        path = root / rel
+        if path.is_file():
+            try:
+                text = path.read_text(encoding="utf-8")
+                json.loads(text)  # validate
+                LOG.info("Loaded repo policy from %s", path)
+                return text
+            except (OSError, json.JSONDecodeError) as e:
+                LOG.warning("Ignoring invalid policy at %s: %s", path, e)
+    return None
+
+
 def invoke_skill(meta: dict[str, str]) -> None:
     headers = {"Authorization": _basic_auth_header()}
     wait_agent_healthy()
@@ -161,7 +177,7 @@ def invoke_skill(meta: dict[str, str]) -> None:
     if not session_id:
         raise RuntimeError(f"no session id: {session}")
 
-    input_json = {
+    input_json: dict[str, Any] = {
         "repo_url": meta["repo_url"],
         "pr_number": int(meta["pr_number"]),
         "project_id": int(meta["project_id"]) if meta["project_id"].isdigit() else meta["project_id"],
@@ -170,6 +186,7 @@ def invoke_skill(meta: dict[str, str]) -> None:
         "github_token": None,
         "gitlab_token": GITLAB_TOKEN,
         "gitlab_url": GITLAB_URL,
+        "policy_json": None,
         "config": {
             "upstream_depth": int(os.environ.get("REVIEW_UPSTREAM_DEPTH", "2")),
             "downstream_depth": int(os.environ.get("REVIEW_DOWNSTREAM_DEPTH", "1")),
@@ -181,11 +198,18 @@ def invoke_skill(meta: dict[str, str]) -> None:
             "impact_report_path": "IMPACT_REPORT.md",
         },
     }
+    policy_text = load_repo_policy_json(WORKSPACE)
+    if policy_text is not None:
+        # Skill accepts a JSON string (or object); stringify for prompt stability.
+        input_json["policy_json"] = policy_text
+
 
     limits = os.environ.get("RGCTL_WITH_LIMITS", "max-mem-mb=1536,threads=1")
     prompt = f"""Load skill rgctl-pr-reviewer-v2 and execute it.
 Repository root is {WORKSPACE} (REPO_PATH). Run all git and rgctl commands there.
 Every `rgctl discover` MUST use --with-limits (RGCTL_WITH_LIMITS={limits}; keys max-mem-mb + threads).
+If policy_json is set or {WORKSPACE}/policy.json / .rgctl/policy.json exists, run rgctl review check --bisect.
+Read applicable architecture markdown (e.g. docs/architecture.md) for soft Concerns; never RED from docs alone.
 Post to GitLab (output_mode comment) with this note shape:
   1) Top: ## Verdict: <emoji> GREEN|YELLOW|RED — one sentence (ladder in the skill)
   2) Sections 1–4 as usual

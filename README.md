@@ -69,6 +69,17 @@ oc apply -k deploy/openshift
 oc apply -k deploy/openshift/overlays/smoke
 ```
 
+## GitHub App
+
+Read-only GitHub App ingress (auto PR review + `@mention`): **[docs/github-app.md](docs/github-app.md)**.
+
+```bash
+oc apply -k deploy/openshift/overlays/github
+# Webhook URL: https://<trigger-route>/hooks/github
+```
+
+Fix PRs / Contents: write are **out of scope** for v1 (soft-refuse on `@bot fix`).
+
 ## Skill Input JSON
 
 Documented in [`agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md`](agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md) (includes `project_id`, `gitlab_token`, `gitlab_url` for OpenShift MR reviews).

@@ -3,6 +3,8 @@
 Audience: workshop facilitators and SAs presenting the agent live.  
 Ops install details stay in [`deploy/openshift/README.md`](../deploy/openshift/README.md). Skill format details stay in [`agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md`](../agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md).
 
+**GitHub App** (auto + `@mention`, read-only): see [`docs/github-app.md`](github-app.md) — separate from this GitLab smoke path.
+
 ---
 
 ## 1. Story (30 seconds)
@@ -142,8 +144,10 @@ Public Route (`oc -n pr-reviewer-smoke get route pr-reviewer-trigger` → `https
 ### 3.6 Demo project / MR seed
 
 - Import or mirror coolstore (or your fixture) into GitLab.
+- Ensure the project has root **`policy.json`** and **`docs/architecture.md`** (copy from [`agent/fixtures/coolstore-seed/`](../agent/fixtures/coolstore-seed/) if missing). The trigger auto-loads repo policy into the skill.
 - Open an MR with a **small, reviewable** change (e.g. tweak `ShippingService` shipping calc) so §3/§4 can cite real `path:line` in the diff.
 - Optional pre-warm: push once before the audience joins so `.rgctl-base` discover cost is partly paid (workspace is `emptyDir` — a pod restart clears it; still validates webhook + LLM).
+- **Policy RED demo:** widen shipping/cart coupling so blast impact exceeds `max_impact_nodes` (12 in the seed), or temporarily lower that limit in `policy.json` on the branch.
 
 ---
 
@@ -192,7 +196,8 @@ Use this as the on-screen checklist:
 |---------|--------|
 | **MR note — Verdict** | `## Verdict: 🟡 YELLOW — …` (emoji **and** the word GREEN / YELLOW / RED) |
 | **§§1–4** | High-level Summary → Call-Path & Architecture → Test Coverage → Line-by-Line (`path:line` bullets) |
-| **Guidelines** | Concerns / Blockers / Open questions / What’s fine (Blockers non-empty if RED) |
+| **Guidelines** | Concerns / Blockers / Open questions / What’s fine (Blockers non-empty if RED); may cite `docs/architecture.md` |
+| **Policy Findings** | IMPACT / note must **not** say “No policy configured” when `policy.json` is in the repo |
 | **Changes tab** | Inline discussions for concrete §3/§4 findings on lines **in the MR diff** |
 | **Workspace** | `/workspace/repo/IMPACT_REPORT.md` with matching `## Verdict` + Mermaid + blast/communities/test handoff |
 

@@ -11,6 +11,8 @@ Thumbs.db
 .env.*
 !.env.example
 
+example/
+
 .claude
 .cursor
 # Ignore tool/config dirs at repo root only (keep agent/.opencode skills tracked)
