@@ -28,9 +28,13 @@ docker run --rm --entrypoint sh "${IMAGE}" -c '
 echo "Starting container ${CONTAINER_NAME}..."
 docker run -d --name "${CONTAINER_NAME}" \
   -e "OPENCODE_SERVER_PASSWORD=${PASSWORD}" \
+  -e "LLM_PROVIDER=${LLM_PROVIDER:-litellm}" \
+  -e "OPENCODE_MODEL=${OPENCODE_MODEL:-}" \
   -e "LITELLM_BASE_URL=${LITELLM_BASE_URL:-https://litemaas.rhoai.rh-aiservices-bu.com/v1}" \
   -e "LITELLM_API_KEY=${LITELLM_API_KEY:-}" \
   -e "LITELLM_MODEL=${LITELLM_MODEL:-Qwen3.6-35B-A3B}" \
+  -e "OPENAI_API_KEY=${OPENAI_API_KEY:-}" \
+  -e "OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}" \
   -p 4096:4096 \
   "${IMAGE}" >/dev/null
 

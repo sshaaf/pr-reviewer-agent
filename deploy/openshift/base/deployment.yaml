@@ -57,6 +57,30 @@ spec:
                   name: pr-reviewer-secrets
                   key: LITELLM_MODEL
                   optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: OPENAI_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: OPENAI_MODEL
+                  optional: true
+            - name: LLM_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: LLM_PROVIDER
+                  optional: true
+            - name: OPENCODE_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: pr-reviewer-secrets
+                  key: OPENCODE_MODEL
+                  optional: true
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -69,7 +93,7 @@ spec:
               memory: 512Mi
             limits:
               cpu: "2"
-              memory: 2Gi
+              memory: 3Gi
           readinessProbe:
             tcpSocket:
               port: opencode
@@ -122,7 +146,7 @@ spec:
               memory: 512Mi
             limits:
               cpu: "2"
-              memory: 2Gi
+              memory: 3Gi
           readinessProbe:
             httpGet:
               path: /healthz

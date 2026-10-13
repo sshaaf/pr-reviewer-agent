@@ -52,10 +52,11 @@ RUN set -e; \
   URL="https://github.com/${RGCTL_REPO}/releases/download/${RGCTL_VERSION}/rgctl-${VER}-${RGCTL_TRIPLE}.tar.gz"; \
   echo "Downloading ${URL}"; \
   curl -fsSL -o /tmp/rgctl.tgz "${URL}"; \
-  tar -C /usr/local/bin -xzf /tmp/rgctl.tgz rgctl; \
-  chmod +x /usr/local/bin/rgctl; \
+  mkdir -p /usr/local/libexec; \
+  tar -C /usr/local/libexec -xzf /tmp/rgctl.tgz rgctl; \
+  chmod +x /usr/local/libexec/rgctl; \
   rm -f /tmp/rgctl.tgz; \
-  rgctl --version
+  /usr/local/libexec/rgctl --version
 
 WORKDIR /app
 
@@ -63,7 +64,12 @@ COPY --chown=1001:0 agent/opencode.json /app/opencode.json
 COPY --chown=1001:0 agent/.opencode /app/.opencode
 COPY --chown=1001:0 agent/scripts/entrypoint.sh /app/scripts/entrypoint.sh
 COPY --chown=1001:0 agent/scripts/review-workspace.sh /app/scripts/review-workspace.sh
-RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/review-workspace.sh
+COPY --chown=1001:0 agent/scripts/post-inline-comments.sh /app/scripts/post-inline-comments.sh
+COPY --chown=1001:0 agent/scripts/rgctl-wrapper.sh /usr/local/bin/rgctl
+RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/review-workspace.sh \
+      /app/scripts/post-inline-comments.sh /usr/local/bin/rgctl \
+  && rgctl --version
+
 
 EXPOSE 4096
 

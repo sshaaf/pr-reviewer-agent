@@ -23,6 +23,30 @@ data:
               "name": "Qwen3.6-35B-A3B"
             }
           }
+        },
+        "openai": {
+          "npm": "@ai-sdk/openai",
+          "name": "OpenAI",
+          "options": {
+            "apiKey": "{env:OPENAI_API_KEY}"
+          },
+          "models": {
+            "gpt-5": {
+              "name": "gpt-5"
+            },
+            "gpt-5-mini": {
+              "name": "gpt-5-mini"
+            },
+            "gpt-4o": {
+              "name": "gpt-4o"
+            },
+            "gpt-4o-mini": {
+              "name": "gpt-4o-mini"
+            },
+            "o4-mini": {
+              "name": "o4-mini"
+            }
+          }
         }
       },
       "permission": {

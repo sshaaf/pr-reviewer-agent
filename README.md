@@ -55,12 +55,18 @@ cp agent/.env.example agent/.env   # set LITELLM_API_KEY for e2e
 ./agent/scripts/e2e-review-smoke.sh pr-reviewer-agent:latest
 ```
 
+## Demo
+
+Presenter runbook (timed script, prereqs, recovery): **[docs/demo-runbook.md](docs/demo-runbook.md)**.
+
 ## OpenShift + GitLab
 
-See **[deploy/openshift/README.md](deploy/openshift/README.md)** for Secrets, `GITLAB_URL`, webhook registration, and verify steps.
+See **[deploy/openshift/README.md](deploy/openshift/README.md)** for Secrets, `GITLAB_URL`, webhook registration, and verify steps. For a live workshop path, use the [demo runbook](docs/demo-runbook.md) (smoke overlay).
 
 ```bash
 oc apply -k deploy/openshift
+# or smoke demo NS:
+oc apply -k deploy/openshift/overlays/smoke
 ```
 
 ## Skill Input JSON

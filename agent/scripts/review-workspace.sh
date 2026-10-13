@@ -9,7 +9,10 @@ TARGET_BRANCH="${TARGET_BRANCH:?TARGET_BRANCH required}"
 SOURCE_BRANCH="${SOURCE_BRANCH:?SOURCE_BRANCH required}"
 HEAD_SHA="${HEAD_SHA:-}"
 WORKSPACE="${WORKSPACE:-/workspace/repo}"
-LIMITS_SPEC="${RGCTL_WITH_LIMITS:-max-mem-mb=1536,threads=1}"
+# Soft RSS (~90% warn / ~95% abort) + Rayon thread cap for discover/CFG.
+# Keys: max-mem-mb|max-mem|memory-mb , threads|thread|max-thread|max-threads
+export RGCTL_WITH_LIMITS="${RGCTL_WITH_LIMITS:-max-mem-mb=1536,threads=1}"
+LIMITS_SPEC="${RGCTL_WITH_LIMITS}"
 # Prefer in-cluster GitLab Service for clone (pods often cannot use the external Route auth UX).
 GITLAB_URL="${GITLAB_URL:-}"
 

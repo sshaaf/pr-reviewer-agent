@@ -54,6 +54,7 @@ Do **not** start `rgctl serve` or `rgctl serve --watch` for this skill.
     "max_symbols": 25,
     "output_mode": "comment",
     "skip_post": false,
+    "post_inline_comments": true,
     "impact_report_path": "IMPACT_REPORT.md"
   }
 }
@@ -66,16 +67,20 @@ When invoked by the OpenShift webhook trigger (shared pod workspace):
 - `REPO_PATH` / working tree is **already prepared** at the MR head (clone + `.rgctl-base` seeded). Prefer that tree; do not re-clone.
 - `project_id` is the numeric GitLab project id; `pr_number` is the MR **iid**.
 - `gitlab_url` is the API base (often the in-cluster Service). Use it for notes API if set; otherwise derive from `repo_url`.
-- Default delivery is `config.output_mode: "comment"` → post the four-section review as an MR note; still write `IMPACT_REPORT.md` on disk.
+- Default delivery is `config.output_mode: "comment"` → post Verdict + four-section review + Guidelines as an MR note **and** post §3/§4 line findings as inline diff discussions (Changes tab); still write `IMPACT_REPORT.md` (with matching `## Verdict`) on disk.
 
 `policy_json` is optional (skip `review check` if absent).  
 `artifact_path` is optional; local base-artifact root (else `$RGCTL_BASE_ARTIFACT` or `{repo}/.rgctl-base/`).  
 `base_ref` must be the MR target (e.g. `origin/main`).  
 `config.output_mode`: `comment` | `check_run` | `session`.  
 `config.skip_post: true` or `output_mode: "session"` → emit the four-section review into the OpenCode session only; do **not** call GitHub/GitLab APIs (smoke / local).  
+`config.post_inline_comments`: default `true` when `output_mode` is `comment`. When true, also post §3/§4 findings as **inline diff comments** (GitLab Changes tab / GitHub Files changed). Set `false` to skip.  
 `config.impact_report_path`: optional path relative to repo root (default `IMPACT_REPORT.md`). Always write this file on a successful review (all output modes).  
 `config.fanout` / `config.max_symbols`: keep modest on Kubernetes agent pods (defaults above).  
-Resource limits for discover: honor `$RGCTL_WITH_LIMITS` (e.g. `max-mem-mb=1536,threads=1`) and always pass `--with-limits` on `rgctl discover` so indexing stays under the pod memory/CPU budget.
+Resource limits for discover (mandatory on every `rgctl discover`):
+- Export/honor `$RGCTL_WITH_LIMITS` (default `max-mem-mb=1536,threads=1`).
+- Keys: `max-mem-mb` (aliases `max-mem`, `memory-mb`) soft RSS budget — warn ~90%, abort ~95%; `threads` (aliases `thread`, `max-thread`, `max-threads`) caps discover/CFG Rayon workers.
+- Always pass `--with-limits "$RGCTL_WITH_LIMITS"` on `rgctl discover` (the container wrapper injects this if omitted). Never run unbounded discover in the pod.
 
 ## Steps
 
@@ -194,6 +199,12 @@ Write markdown with this exact structure (H2 order fixed):
 ## Overview
 (1–3 sentences + symbol/path counts from review paths)
 
+## Verdict
+(`🟢 GREEN` | `🟡 YELLOW` | `🔴 RED`) — one sentence why. Same COLOR as the MR note.
+
+### Concerns
+(Bullets the author should acknowledge before merge, or `None`)
+
 ## Impact Diagram
 
 ```mermaid
@@ -233,6 +244,7 @@ flowchart LR
 
 **Section content rules:**
 
+- **Verdict** — same COLOR + one-sentence why as the MR note; Concerns list MUST match Guidelines.
 - **Change Set** — list every file or top-level symbol in scope (respect `--max-symbols` / fanout; note truncated remainder).
 - **Changes** — one `###` heading per Change Set item: delta kinds (added/removed/retargeted), blast notes, risk.
 - **Blast Radius** — upstream/downstream hops; boundary kinds when Step 2 ran.
@@ -241,27 +253,92 @@ flowchart LR
 - **Test Handoff** — concrete bullets (not essays): cases to add, untested dependents, symbol/path identifiers for a follow-up test agent.
 - **Sources** — `base_ref`, `head_ref`, resolved `RGCTL_BASE_ARTIFACT` path, and the rgctl commands run.
 
-#### 4b. Four-section structured review (human / session / PR)
+#### 4b. Verdict, four-section review, and Guidelines (human / session / PR)
 
-Produce a Markdown review with these exact section headings:
+**Traffic-light ladder (first match wins — pick exactly one COLOR):**
 
-1. **High-level Summary** — What changed, symbol count, overall risk. MAY mention the Impact Report path.
+1. **RED** if any: policy **new** or **regression**; security / auth / PII / payment integrity issue; clear functional break with no mitigation.
+2. Else **YELLOW** if any: user-visible behavior change on a hot path without tests; medium+ blast radius with weak coverage; dead/misleading code that could ship by accident; product/intent ambiguity on user-visible numbers or contracts.
+3. Else **GREEN** (nits / style / docs only, small blast, no policy new/regression).
+
+YELLOW means “ship with eyes open”, not soft-RED. Always write the word `GREEN` / `YELLOW` / `RED` next to the emoji.
+
+Produce Markdown in this **exact order**:
+
+```markdown
+## Verdict: 🟡 YELLOW — <one sentence why>
+
+## 1. High-level Summary
+...
+
+## 2. Call-Path & Architecture Impact
+...
+
+## 3. Test Coverage & Regressions
+...
+
+## 4. Line-by-Line Feedback
+...
+
+## Guidelines
+
+### Concerns
+(acknowledge before merge — or `None`)
+
+### Blockers
+(must fix before merge — required non-empty for RED; else `None`)
+
+### Open questions
+(or `None`)
+
+### What’s fine
+(what is safe / low risk)
+```
+
+Section content:
+
+1. **High-level Summary** — What changed, symbol count. Do **not** invent a second risk scale; the Verdict is authoritative. MAY mention `IMPACT_REPORT.md`.
 2. **Call-Path & Architecture Impact** — Steps 1–2: added/removed/retargeted paths; boundary crossings; deprecated boundaries.
-3. **Test Coverage & Regressions** — Downstream deps in the blast radius lacking tests; suggest cases targeting `path_delta`.
-4. **Line-by-Line Feedback** — Logic, bugs, style from the git diff (`git diff ${BASE_REF}...${HEAD_REF}`).
+3. **Test Coverage & Regressions** — Downstream deps in the blast radius lacking tests; suggest cases targeting `path_delta`. When a finding maps to a concrete changed line, cite `path:line` (repo-relative).
+4. **Line-by-Line Feedback** — Logic, bugs, style from the git diff (`git diff ${BASE_REF}...${HEAD_REF}`). **Every bullet MUST start with** `` `path:line` `` or `` `path:start-end` `` (use the **new** file line number for added/modified lines).
+5. **Guidelines** (after §4) — Concerns / Blockers / Open questions / What’s fine as above. For RED, list Blockers first with at least one item.
 
 Do **not** paste the full Impact Report into the PR comment. The report file is the deep handoff; this summary stays short.
 
 **Output routing (four-section review):**
 
 - If `config.output_mode` is `session` **or** `config.skip_post` is true: write the four-section Markdown as the assistant reply in the current OpenCode session and **stop** (no VCS API calls). Prefer this for smoke tests. The Impact Report file MUST already be on disk.
-- If `output_mode` is `comment` (default): POST the four-section summary via GitHub/GitLab API using `github_token` / `gitlab_token` (Impact Report file still written):
-  - GitHub: `POST /repos/{owner}/{repo}/issues/{pr_number}/comments`
-  - GitLab: `POST {gitlab_url}/api/v4/projects/{project_id}/merge_requests/{pr_number}/notes`
-    - Prefer numeric `project_id` from Input JSON. If absent, URL-encode the path from `repo_url` (`namespace%2Fproject`).
-    - Body JSON: `{ "body": "<four-section markdown>" }`
-    - Header: `PRIVATE-TOKEN: <gitlab_token>` (or `Authorization: Bearer <gitlab_token>`)
-- If `output_mode` is `check_run`: GitHub Check run / GitLab pipeline note (Impact Report file still written).
+- If `output_mode` is `comment` (default):
+  1. POST the four-section summary as a top-level MR/PR note (Impact Report file still written):
+     - GitHub: `POST /repos/{owner}/{repo}/issues/{pr_number}/comments`
+     - GitLab: `POST {gitlab_url}/api/v4/projects/{project_id}/merge_requests/{pr_number}/notes`
+       - Prefer numeric `project_id` from Input JSON. If absent, URL-encode the path from `repo_url` (`namespace%2Fproject`).
+       - Body JSON: `{ "body": "<four-section markdown>" }`
+       - Header: `PRIVATE-TOKEN: <gitlab_token>` (or `Authorization: Bearer <gitlab_token>`)
+  2. **Inline diff comments (required when `post_inline_comments` is not false):** turn every §3/§4 finding that has a concrete `path` + line into Changes-tab comments:
+     - Write `${REPO_PATH}/.rgctl/line-comments.json`:
+       ```json
+       {
+         "provider": "gitlab",
+         "gitlab_url": "<from Input JSON gitlab_url>",
+         "gitlab_token": "<gitlab_token>",
+         "project_id": <project_id>,
+         "pr_number": <pr_number>,
+         "repo_url": "<repo_url>",
+         "items": [
+           {"path":"src/main/java/.../ShippingService.java","new_line":22,"body":"Prefer `return 4.49;` over `(2.99 + 1.50)`.","section":"4","severity":"yellow"},
+           {"path":"src/main/java/.../ShoppingCartService.java","new_line":74,"body":"Add a test for insurance guard vs new shipping band.","section":"3","severity":"yellow"}
+         ]
+       }
+       ```
+     - Optional `severity`: `green` | `yellow` | `red` — the poster prefixes `🟢` / `🟡` / `🔴` on the Changes-tab note.
+     - Use `new_line` for added/modified lines (Changes tab green/right side). Use `old_line` only for pure deletions (omit `new_line`).
+     - Only lines that appear in the MR diff can be commented (unchanged context lines return HTTP 400).
+     - Cap ~20 items (prefer §4; include §3 only when tied to a specific changed line). Skip vendored/generated paths.
+     - Run: `bash /app/scripts/post-inline-comments.sh "${REPO_PATH}/.rgctl/line-comments.json"`  
+       (or `$(dirname "$0")/post-inline-comments.sh` when the script is on PATH next to the skill helpers).
+     - The script posts GitLab **discussions** with a diff `position` (visible on the Changes tab) or GitHub pull-review comments.
+- If `output_mode` is `check_run`: GitHub Check run / GitLab pipeline note (Impact Report file still written). Still post inline comments when `post_inline_comments` is true.
 
 Auth when posting GitHub: `Authorization: Bearer <token>` or `Authorization: token <token>`.
 
@@ -276,4 +353,4 @@ Auth when posting GitHub: `Authorization: Bearer <token>` or `Authorization: tok
 - Use `--full-snapshots` only when both base and head artifacts are pre-built; otherwise keep default delta-head synthesis.
 - Always write `IMPACT_REPORT.md` (or `config.impact_report_path`) before finishing — even in `session` / `skip_post` mode. Do not substitute the report for the four-section headings.
 - Prefer paths under `REPO_PATH` for scratch JSON and the Impact Report. Avoid `/tmp` unless `external_directory` for `/tmp` is allowed.
-- **Resource limits:** Agent pods typically have ~2Gi / 2 CPU. Always run `rgctl discover … --with-limits` (or set `RGCTL_WITH_LIMITS=max-mem-mb=1536,threads=1`). Soft RSS tripwire aborts near ~95% of `max-mem-mb` instead of OOM-killing the pod. If discover aborts on memory, lower threads, drop languages with `-l`, or raise the pod limit + `max-mem-mb` together — leave headroom for OpenCode.
+- **Resource limits:** Always `rgctl discover … --with-limits "$RGCTL_WITH_LIMITS"` (`max-mem-mb` / `threads`). Soft RSS tripwire aborts near ~95% of `max-mem-mb` instead of cgroup OOM. If discover aborts, lower `threads`, filter with `-l`, or raise pod memory + `max-mem-mb` together — leave headroom for OpenCode.

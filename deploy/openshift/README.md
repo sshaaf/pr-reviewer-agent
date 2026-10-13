@@ -2,6 +2,8 @@
 
 Runs OpenCode (`pr-reviewer-agent`) and a GitLab MR webhook trigger as **two containers in one pod**, sharing an `emptyDir` workspace at `/workspace`.
 
+**Live demos / workshops:** follow **[docs/demo-runbook.md](../../docs/demo-runbook.md)** (smoke overlay, timed script, recovery). This README is the ops install sheet.
+
 ```
 GitLab (on OpenShift) --webhook--> Route --> trigger:8080
                                               | clone + rgctl discover
@@ -23,13 +25,18 @@ GitLab (on OpenShift) --webhook--> Route --> trigger:8080
 oc create namespace pr-reviewer 2>/dev/null || true
 
 oc -n pr-reviewer create secret generic pr-reviewer-secrets \
+  --from-literal=LLM_PROVIDER='litellm' \
   --from-literal=LITELLM_API_KEY='...' \
   --from-literal=LITELLM_BASE_URL='https://litemaas.example.com/v1' \
   --from-literal=LITELLM_MODEL='Qwen3.6-35B-A3B' \
+  --from-literal=OPENAI_API_KEY='sk-...' \
+  --from-literal=OPENAI_MODEL='gpt-4o' \
   --from-literal=OPENCODE_SERVER_PASSWORD='pick-a-strong-password' \
   --from-literal=GITLAB_TOKEN='glpat-...' \
   --from-literal=GITLAB_WEBHOOK_SECRET='shared-webhook-secret'
 ```
+
+Set `LLM_PROVIDER=openai` (or `OPENCODE_MODEL=openai/gpt-4o`) to use OpenAI instead of LiteLLM. Unused provider keys may be empty.
 
 `GITLAB_TOKEN` needs `api` + `read_repository` on target projects (project or group access token).
 
@@ -98,7 +105,7 @@ oc -n pr-reviewer logs -f deploy/pr-reviewer -c agent
 
 ## Resource notes
 
-Defaults: agent **2 CPU / 2Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=1536,threads=1`. Raise both together for large repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
+Defaults in base manifests: agent/trigger **2 CPU / 3Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=2048,threads=1` (`max-mem-mb` soft RSS + `threads` Rayon cap on every `rgctl discover`). Raise pod memory and the spec together for large repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
 
 ## Optional agent Route
 

@@ -28,20 +28,27 @@ RUN set -e; \
   VER="${RGCTL_VERSION#v}"; \
   URL="https://github.com/${RGCTL_REPO}/releases/download/${RGCTL_VERSION}/rgctl-${VER}-${RGCTL_TRIPLE}.tar.gz"; \
   curl -fsSL -o /tmp/rgctl.tgz "${URL}"; \
-  tar -C /usr/local/bin -xzf /tmp/rgctl.tgz rgctl; \
-  chmod +x /usr/local/bin/rgctl; \
+  mkdir -p /usr/local/libexec; \
+  tar -C /usr/local/libexec -xzf /tmp/rgctl.tgz rgctl; \
+  chmod +x /usr/local/libexec/rgctl; \
   rm -f /tmp/rgctl.tgz; \
-  rgctl --version
+  /usr/local/libexec/rgctl --version
 
 COPY --chown=1001:0 trigger/app.py /app/trigger/app.py
 COPY --chown=1001:0 agent/scripts/review-workspace.sh /app/scripts/review-workspace.sh
-RUN chmod +x /app/scripts/review-workspace.sh /app/trigger/app.py
+COPY --chown=1001:0 agent/scripts/post-inline-comments.sh /app/scripts/post-inline-comments.sh
+COPY --chown=1001:0 agent/scripts/rgctl-wrapper.sh /usr/local/bin/rgctl
+RUN chmod +x /app/scripts/review-workspace.sh /app/scripts/post-inline-comments.sh \
+      /app/trigger/app.py /usr/local/bin/rgctl \
+  && rgctl --version
 
 ENV HOME=/tmp
 ENV WORKSPACE=/workspace/repo
 ENV REVIEW_WORKSPACE_SCRIPT=/app/scripts/review-workspace.sh
 ENV LISTEN_PORT=8080
 ENV AGENT_URL=http://127.0.0.1:4096
+# Soft RSS + Rayon thread cap for discover (override via ConfigMap/Secret).
+ENV RGCTL_WITH_LIMITS=max-mem-mb=1536,threads=1
 
 USER 1001
 EXPOSE 8080

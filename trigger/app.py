@@ -177,14 +177,23 @@ def invoke_skill(meta: dict[str, str]) -> None:
             "max_symbols": int(os.environ.get("REVIEW_MAX_SYMBOLS", "25")),
             "output_mode": "comment",
             "skip_post": False,
+            "post_inline_comments": True,
             "impact_report_path": "IMPACT_REPORT.md",
         },
     }
 
+    limits = os.environ.get("RGCTL_WITH_LIMITS", "max-mem-mb=1536,threads=1")
     prompt = f"""Load skill rgctl-pr-reviewer-v2 and execute it.
 Repository root is {WORKSPACE} (REPO_PATH). Run all git and rgctl commands there.
-Post the four-section review to GitLab as an MR note (output_mode comment).
-Also write IMPACT_REPORT.md in the repository root.
+Every `rgctl discover` MUST use --with-limits (RGCTL_WITH_LIMITS={limits}; keys max-mem-mb + threads).
+Post to GitLab (output_mode comment) with this note shape:
+  1) Top: ## Verdict: <emoji> GREEN|YELLOW|RED — one sentence (ladder in the skill)
+  2) Sections 1–4 as usual
+  3) End: ## Guidelines with Concerns / Blockers / Open questions / What's fine
+Also post §3/§4 line findings as inline Changes-tab comments (optional severity green|yellow|red):
+  write .rgctl/line-comments.json then run
+  bash /app/scripts/post-inline-comments.sh .rgctl/line-comments.json
+Also write IMPACT_REPORT.md including ## Verdict + Concerns matching the note.
 
 Input JSON:
 {json.dumps(input_json, indent=2)}

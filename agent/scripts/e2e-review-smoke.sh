@@ -117,9 +117,23 @@ die() {
   exit 1
 }
 
-if [ -z "${LITELLM_API_KEY:-}" ]; then
-  die "LITELLM_API_KEY is required for e2e-review-smoke (set in agent/.env)"
+LLM_PROVIDER="${LLM_PROVIDER:-litellm}"
+OPENAI_MODEL="${OPENAI_MODEL:-gpt-4o}"
+if [ -n "${OPENCODE_MODEL:-}" ]; then
+  _e2e_provider="${OPENCODE_MODEL%%/*}"
+elif [ "${LLM_PROVIDER}" = "openai" ]; then
+  _e2e_provider="openai"
+else
+  _e2e_provider="litellm"
 fi
+case "${_e2e_provider}" in
+  openai)
+    [ -n "${OPENAI_API_KEY:-}" ] || die "OPENAI_API_KEY is required when LLM_PROVIDER=openai (set in agent/.env)"
+    ;;
+  *)
+    [ -n "${LITELLM_API_KEY:-}" ] || die "LITELLM_API_KEY is required when LLM_PROVIDER=litellm (set in agent/.env)"
+    ;;
+esac
 
 command -v docker >/dev/null || die "docker is required"
 command -v curl >/dev/null || die "curl is required"
@@ -130,8 +144,10 @@ command -v rgctl >/dev/null || die "rgctl is required on PATH to seed .rgctl-bas
 trace "RUN_DIR=${RUN_DIR}"
 trace "WORK_ROOT=${WORK_ROOT}"
 trace "IMAGE=${IMAGE}"
+trace "LLM_PROVIDER=${LLM_PROVIDER} OPENCODE_MODEL=${OPENCODE_MODEL:-}"
 trace "LITELLM_BASE_URL=${LITELLM_BASE_URL}"
 trace "LITELLM_MODEL=${LITELLM_MODEL}"
+trace "OPENAI_MODEL=${OPENAI_MODEL}"
 
 jq -n \
   --arg image "$IMAGE" \
@@ -224,9 +240,13 @@ docker run -d --name "${CONTAINER_NAME}" \
   -p "${HOST_PORT}:4096" \
   -v "${REPO_DIR}:/app/repo:rw" \
   -e "OPENCODE_SERVER_PASSWORD=${PASSWORD}" \
+  -e "LLM_PROVIDER=${LLM_PROVIDER}" \
+  -e "OPENCODE_MODEL=${OPENCODE_MODEL:-}" \
   -e "LITELLM_BASE_URL=${LITELLM_BASE_URL}" \
-  -e "LITELLM_API_KEY=${LITELLM_API_KEY}" \
+  -e "LITELLM_API_KEY=${LITELLM_API_KEY:-}" \
   -e "LITELLM_MODEL=${LITELLM_MODEL}" \
+  -e "OPENAI_API_KEY=${OPENAI_API_KEY:-}" \
+  -e "OPENAI_MODEL=${OPENAI_MODEL}" \
   -e "REPO_PATH=/app/repo" \
   -e "RGCTL_BASE_ARTIFACT=/app/repo/.rgctl-base" \
   -e "RGCTL_WITH_LIMITS=${RGCTL_WITH_LIMITS:-max-mem-mb=1536,threads=1}" \
