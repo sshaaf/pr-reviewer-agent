@@ -46,6 +46,8 @@ deploy/openshift/         Kustomize manifests (agent + trigger sidecar pod)
 | Agent | `quay.io/sshaaf/pr-reviewer-agent` |
 | Trigger | `quay.io/sshaaf/pr-reviewer-trigger` |
 
+CI builds and pushes both on `main` (and via **Actions → workflow_dispatch**). Repo secrets: `QUAY_USERNAME`, `QUAY_PASSWORD`. Images are scanned so `.env` / PEMs are never baked in — OpenShift injects credentials via Secrets/ConfigMaps.
+
 ## Local build / smoke
 
 ```bash

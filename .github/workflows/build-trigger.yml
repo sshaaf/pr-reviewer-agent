@@ -5,8 +5,18 @@ on:
     branches: [main]
     paths:
       - "trigger/**"
-      - "agent/scripts/review-workspace.sh"
+      - "agent/scripts/**"
+      - "trigger/Dockerfile"
+      - ".dockerignore"
       - ".github/workflows/build-trigger.yml"
+  pull_request:
+    paths:
+      - "trigger/**"
+      - "agent/scripts/**"
+      - "trigger/Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/build-trigger.yml"
+  workflow_dispatch:
 
 env:
   IMAGE: quay.io/sshaaf/pr-reviewer-trigger
@@ -20,6 +30,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Unit tests
+        run: |
+          cd trigger
+          python3 -m unittest test_github_app.py test_gitlab_app.py -v
+
       - name: Build image (local)
         uses: docker/build-push-action@v5
         with:
@@ -32,23 +47,55 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke — trigger --help / import
+      - name: Assert no secrets baked into image
         run: |
-          docker run --rm --entrypoint python3 ${{ env.IMAGE }}:ci -c "import ast; ast.parse(open('/app/trigger/app.py').read())"
+          set -euo pipefail
+          docker run --rm --entrypoint sh "${{ env.IMAGE }}:ci" -c '
+            set -e
+            if [ -f /app/.env ] || [ -f /.env ]; then echo "FAIL: .env present in image"; exit 1; fi
+            if find /app -name ".env" -o -name ".env.*" 2>/dev/null | grep -q .; then
+              echo "FAIL: .env* under /app"; find /app -name ".env" -o -name ".env.*"; exit 1
+            fi
+            if find /app -name "*.pem" 2>/dev/null | grep -q .; then
+              echo "FAIL: PEM files under /app"; find /app -name "*.pem"; exit 1
+            fi
+            if [ -d /app/.local ] || [ -d /.local ]; then echo "FAIL: .local present"; exit 1; fi
+            # Trigger code must not embed literal tokens
+            if grep -RE "sk-[A-Za-z0-9_-]{20,}|glpat-[A-Za-z0-9_-]+|-----BEGIN (RSA |EC )?PRIVATE KEY-----" /app/trigger 2>/dev/null; then
+              echo "FAIL: credential-like material under /app/trigger"; exit 1
+            fi
+            test -f /app/trigger/mention_intents.py
+            echo "OK: no baked secrets under /app"
+          '
+
+      - name: Smoke — trigger modules importable
+        run: |
+          docker run --rm --entrypoint python3 ${{ env.IMAGE }}:ci -c \
+            "import app, github_app, mention_intents; print('imports ok')"
           docker run --rm --entrypoint test ${{ env.IMAGE }}:ci -x /app/scripts/review-workspace.sh
+          docker run --rm --entrypoint test ${{ env.IMAGE }}:ci -x /app/trigger/entrypoint.sh
+
+      - name: Require Quay credentials on main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+        run: |
+          if [ -z "${QUAY_PASSWORD}" ] || [ -z "${QUAY_USERNAME}" ]; then
+            echo "::error::Set repository secrets QUAY_USERNAME and QUAY_PASSWORD so images push to quay.io/sshaaf/"
+            exit 1
+          fi
 
       - name: Log in to Quay.io
-        if: success() && env.QUAY_PASSWORD != ''
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: docker/login-action@v3
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
-        env:
-          QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Push image
-        if: success() && env.QUAY_PASSWORD != ''
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -59,5 +106,3 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
-        env:
-          QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}

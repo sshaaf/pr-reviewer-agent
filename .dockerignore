@@ -1,0 +1,36 @@
+# Keep build context free of credentials and local clutter.
+.git
+.github
+.cursor
+.local
+.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+
+# Secrets / local env (never bake into images)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+**/*.pem
+**/id_rsa
+**/id_ed25519
+.local/
+**/.local/
+
+# Example secrets only — real secret.yaml must never be committed or copied
+**/secret.yaml
+**/secrets.yaml
+**/*-secrets.yaml
+!**/secret-example.yaml
+!**/github-app-secret-example.yaml
+
+# Large / irrelevant for image layers (keep agent/.opencode/** including SKILL.md)
+openspec/
+agent-transcripts/
+docs/
+*.log
