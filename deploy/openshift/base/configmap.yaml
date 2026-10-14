@@ -11,7 +11,8 @@ data:
   # litellm | openai — override with OPENCODE_MODEL=provider/model for a one-shot switch
   LLM_PROVIDER: "litellm"
   OPENAI_MODEL: "gpt-4o"
-  RGCTL_WITH_LIMITS: "max-mem-mb=2048,threads=1"
+  # Keep max-mem-mb under the container memory limit (4Gi) with headroom for OpenCode/overhead.
+  RGCTL_WITH_LIMITS: "max-mem-mb=3072,threads=4"
   REPO_PATH: "/workspace/repo"
   WORKSPACE: "/workspace/repo"
   AGENT_URL: "http://127.0.0.1:4096"

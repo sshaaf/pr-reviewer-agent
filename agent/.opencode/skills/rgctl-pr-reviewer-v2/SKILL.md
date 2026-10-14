@@ -207,21 +207,22 @@ fi
 
 Parse violations (`new` / `existing` / `resolved` / `regression`). `--bisect` attributes each to the introducing commit. Skip `review check` only when **no** active policy file exists after resolution. Policy **new** / **regression** feed Verdict **RED** (existing ladder).
 
-### Step 3b: Architecture markdown applicability (soft)
+### Step 3b: Review guidance docs (soft)
 
-After Step 1 path delta is known, discover architecture-relevant markdown that may apply to the MR. This step is **advisory** — it MUST NOT alone set Verdict to RED.
+After Step 1 path delta is known, look for repo guidance that may apply to the MR. This step is **advisory** — it MUST NOT alone set Verdict to RED.
 
-**Candidate globs** (repo-relative):
+**Candidate paths** (repo-relative; check in this order, case-sensitive then case-insensitive):
 
-- `ARCHITECTURE.md`, `docs/architecture.md`, `docs/architecture/**`
-- `docs/adr/**`, `ADR/**`, `**/ARCHITECTURE.md`
-- `README.md` only under directories that overlap changed paths from the git diff / `path_delta`
+- `REVIEW.md`, `docs/REVIEW.md`
+- `AGENTS.md`, `docs/AGENTS.md`
+
+**Do not** treat `Architecture.md` / `docs/architecture.md` / ADR trees as review inputs unless those files are also named `REVIEW.md` or `AGENTS.md`.
 
 **Exclude:** `rgctl-benchmark/**`, `.claude/**`, `target/**`, `node_modules/**`, vendored trees.
 
-**Cap:** read at most **5** files. If none match, skip quietly.
+**Cap:** read at most these **4** candidates (skip quietly when absent). Prefer root over `docs/` when both exist for the same name.
 
-For each read file, extract constraints that relate to modules/symbols in `path_delta` or review-paths output. Surface matches in §2 Call-Path & Architecture Impact and/or Guidelines **Concerns** / **Open questions**, citing the doc path. Prefer “doc says X; graph/diff shows Y” — do not invent blast edges from prose alone.
+For each file found, extract constraints / review hints that relate to modules/symbols in `path_delta` or review-paths output. Surface matches in §2 Call-Path & Architecture Impact and/or Guidelines **Concerns** / **Open questions**, citing the doc path. Prefer “doc says X; graph/diff shows Y” — do not invent blast edges from prose alone.
 
 ### Step 4: Write Impact Report, then synthesize short review
 
@@ -274,7 +275,7 @@ flowchart LR
 (Bullets: suggested tests, untested dependents, symbol/path ids for a test agent)
 
 ## Sources
-(base_ref, head_ref, base artifact path, commands used; MAY list architecture markdown paths from Step 3b)
+(base_ref, head_ref, base artifact path, commands used; MAY list REVIEW.md / AGENTS.md paths from Step 3b)
 ~~~~
 
 **Mermaid rules (Impact Diagram):**
@@ -301,10 +302,10 @@ flowchart LR
 **Traffic-light ladder (first match wins — pick exactly one COLOR):**
 
 1. **RED** if any: policy **new** or **regression** from Step 3; security / auth / PII / payment integrity issue; clear functional break with no mitigation.
-2. Else **YELLOW** if any: user-visible behavior change on a hot path without tests; medium+ blast radius with weak coverage; dead/misleading code that could ship by accident; product/intent ambiguity on user-visible numbers or contracts; **evidence-linked** architecture-doc Concerns from Step 3b.
+2. Else **YELLOW** if any: user-visible behavior change on a hot path without tests; medium+ blast radius with weak coverage; dead/misleading code that could ship by accident; product/intent ambiguity on user-visible numbers or contracts; **evidence-linked** REVIEW.md / AGENTS.md Concerns from Step 3b.
 3. Else **GREEN** (nits / style / docs only, small blast, no policy new/regression).
 
-YELLOW means “ship with eyes open”, not soft-RED. Always write the word `GREEN` / `YELLOW` / `RED` next to the emoji. **Do not** set RED solely because of Step 3b markdown findings.
+YELLOW means “ship with eyes open”, not soft-RED. Always write the word `GREEN` / `YELLOW` / `RED` next to the emoji. **Do not** set RED solely because of Step 3b REVIEW.md / AGENTS.md findings.
 
 Produce Markdown in this **exact order**:
 

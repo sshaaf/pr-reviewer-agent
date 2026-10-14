@@ -1,4 +1,4 @@
-# Coolstore architecture guidelines
+# Coolstore review guidelines
 
 ## Impact budget
 

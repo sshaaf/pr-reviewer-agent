@@ -209,7 +209,7 @@ def invoke_skill(meta: dict[str, str]) -> None:
 Repository root is {WORKSPACE} (REPO_PATH). Run all git and rgctl commands there.
 Every `rgctl discover` MUST use --with-limits (RGCTL_WITH_LIMITS={limits}; keys max-mem-mb + threads).
 If policy_json is set or {WORKSPACE}/policy.json / .rgctl/policy.json exists, run rgctl review check --bisect.
-Read applicable architecture markdown (e.g. docs/architecture.md) for soft Concerns; never RED from docs alone.
+Read REVIEW.md and/or AGENTS.md (repo root or docs/) for soft Concerns when present; never RED from docs alone.
 Post to GitLab (output_mode comment) with this note shape:
   1) Top: ## Verdict: <emoji> GREEN|YELLOW|RED — one sentence (ladder in the skill)
   2) Sections 1–4 as usual

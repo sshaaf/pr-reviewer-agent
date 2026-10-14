@@ -72,10 +72,13 @@ Trigger image entrypoint selects provider via `TRIGGER_PROVIDER=github` (overlay
 TRIGGER_PROVIDER=github python3 /app/trigger/github_app.py
 ```
 
-OpenShift: apply base (or a github overlay) so the trigger container sets:
+OpenShift: apply the github overlay (standard **4 CPU / 4Gi** + `RGCTL_WITH_LIMITS=max-mem-mb=3072,threads=4` profile):
 
-- `TRIGGER_PROVIDER=github`
-- env from `pr-reviewer-github-app` (+ shared config/LLM secrets)
+```bash
+./deploy/openshift/deploy.sh github
+```
+
+That sets `TRIGGER_PROVIDER=github` and pulls env from `pr-reviewer-github-app` (+ shared config/LLM secrets).
 
 Webhook path: **`POST /hooks/github`** (health: `GET /healthz`).
 

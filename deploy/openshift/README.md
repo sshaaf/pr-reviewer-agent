@@ -54,10 +54,21 @@ Use your GitLab Operator/Helm Service name and port (`oc -n gitlab get svc`).
 
 ## 3. Apply
 
-```bash
-# Dry-run (no cluster required for client-side validate if using kustomize)
-kubectl kustomize deploy/openshift
+Standard sizing profile (baked into `base/`, enforced by `deploy.sh`):
 
+| Setting | Value |
+|---------|--------|
+| agent + trigger limits | **4 CPU / 4Gi** (requests 500m / 1Gi) |
+| `RGCTL_WITH_LIMITS` | **`max-mem-mb=3072,threads=4`** |
+
+```bash
+# Preferred — applies overlay and verifies the profile on the live pod
+./deploy/openshift/deploy.sh              # base → ns pr-reviewer
+./deploy/openshift/deploy.sh smoke        # overlays/smoke
+./deploy/openshift/deploy.sh github       # overlays/github
+./deploy/openshift/deploy.sh --dry-run smoke
+
+# Equivalent manual apply (profile still comes from base manifests)
 oc apply -k deploy/openshift
 oc -n pr-reviewer rollout status deploy/pr-reviewer
 ```
@@ -100,7 +111,7 @@ oc -n pr-reviewer exec deploy/pr-reviewer -c agent -- printenv RGCTL_WITH_LIMITS
 
 **End-to-end:** open or update an MR on a watched project → trigger logs show clone/discover/`prompt_async` → MR gains a notes comment with the four-section review; workspace contains `IMPACT_REPORT.md` under `/workspace/repo`.
 
-If the cloned repo has root `policy.json` or `.rgctl/policy.json`, the trigger loads it into Input `policy_json` and the skill runs `rgctl review check --bisect` (Policy Findings in the Impact Report). Architecture markdown such as `docs/architecture.md` is consulted for soft Guidelines Concerns only.
+If the cloned repo has root `policy.json` or `.rgctl/policy.json`, the trigger loads it into Input `policy_json` and the skill runs `rgctl review check --bisect` (Policy Findings in the Impact Report). `REVIEW.md` and `AGENTS.md` (repo root or `docs/`) are consulted for soft Guidelines Concerns only.
 
 ```bash
 oc -n pr-reviewer logs -f deploy/pr-reviewer -c trigger
@@ -109,7 +120,7 @@ oc -n pr-reviewer logs -f deploy/pr-reviewer -c agent
 
 ## Resource notes
 
-Defaults in base manifests: agent/trigger **2 CPU / 3Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=2048,threads=1` (`max-mem-mb` soft RSS + `threads` Rayon cap on every `rgctl discover`). Raise pod memory and the spec together for large repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
+Defaults in base manifests: agent/trigger **4 CPU / 4Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=3072,threads=4` (`max-mem-mb` soft RSS + `threads` Rayon cap on every `rgctl discover`). Keep `max-mem-mb` under the container limit with headroom; raise both together for larger repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
 
 ## Optional agent Route
 

@@ -40,7 +40,7 @@ Pass these into the container (`-e` / Compose / Secret). Do not bake keys into t
 | `REPO_PATH` | `/app/repo` | Git checkout the skill should operate on |
 | `RGCTL_WITH_LIMITS` | `max-mem-mb=1536,threads=1` | Passed to every `rgctl discover --with-limits`. Keys: `max-mem-mb` (aliases `max-mem`, `memory-mb`) soft RSS — warn ~90%, abort ~95%; `threads` (aliases `thread`, `max-thread`, `max-threads`) caps discover/CFG Rayon workers. Keep `max-mem-mb` below the pod memory limit with headroom for OpenCode. The image wraps `rgctl` so discover cannot skip limits. |
 
-Kubernetes agent pods default to **2 CPU / 2Gi** (OpenShift smoke uses **3Gi** + `max-mem-mb=2048`). Raise pod memory and `RGCTL_WITH_LIMITS` together if discover aborts near the soft tripwire.
+Kubernetes agent pods default to **2 CPU / 2Gi** (OpenShift base uses **4 CPU / 4Gi** + `max-mem-mb=3072,threads=4`). Raise pod memory and `RGCTL_WITH_LIMITS` together if discover aborts near the soft tripwire.
 
 OpenShift + in-cluster GitLab deploy: see [deploy/openshift/README.md](../deploy/openshift/README.md).
 
