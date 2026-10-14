@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from github_app import should_auto_review_pr, verify_signature  # noqa: E402
-from github_intents import has_mention, parse_intent  # noqa: E402
+from mention_intents import has_mention, parse_intent  # noqa: E402
 
 
 class IntentTests(unittest.TestCase):

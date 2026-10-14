@@ -38,6 +38,7 @@ RUN set -e; \
 COPY --chown=1001:0 trigger/app.py /app/trigger/app.py
 COPY --chown=1001:0 trigger/github_app.py /app/trigger/github_app.py
 COPY --chown=1001:0 trigger/github_auth.py /app/trigger/github_auth.py
+COPY --chown=1001:0 trigger/mention_intents.py /app/trigger/mention_intents.py
 COPY --chown=1001:0 trigger/github_intents.py /app/trigger/github_intents.py
 COPY --chown=1001:0 trigger/entrypoint.sh /app/trigger/entrypoint.sh
 COPY --chown=1001:0 agent/scripts/review-workspace.sh /app/scripts/review-workspace.sh

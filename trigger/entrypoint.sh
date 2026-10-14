@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Select GitLab or GitHub App trigger process.
+# Dual-provider (both /hooks/gitlab and /hooks/github in one process) is out of scope —
+# set TRIGGER_PROVIDER to exactly one of: gitlab | github.
 set -euo pipefail
 PROVIDER="${TRIGGER_PROVIDER:-gitlab}"
 export PYTHONPATH="/app/trigger${PYTHONPATH:+:$PYTHONPATH}"

@@ -74,8 +74,11 @@ oc -n "$NS" create secret generic pr-reviewer-secrets \
   --from-literal=OPENAI_MODEL='gpt-4o' \
   --from-literal=OPENCODE_SERVER_PASSWORD='pick-a-strong-password' \
   --from-literal=GITLAB_TOKEN='glpat-...' \
+  --from-literal=GITLAB_BOT_USERNAME='rgctl-bot' \
   --from-literal=GITLAB_WEBHOOK_SECRET='shared-webhook-secret'
 ```
+
+`GITLAB_TOKEN` MUST be a **named bot** PAT (e.g. user/service account `rgctl-bot` with `api` + `read_repository`) — not an administrator account — so MR notes show as `@rgctl-bot`.
 
 For OpenAI-first demos, set `LLM_PROVIDER=openai` and a real `OPENAI_API_KEY` (LiteLLM keys may be empty). See [`deploy/openshift/secret-example.yaml`](../deploy/openshift/secret-example.yaml).
 
@@ -135,9 +138,9 @@ In the GitLab **demo project** → Settings → Webhooks:
 |-------|--------|
 | URL | `http://pr-reviewer-trigger.pr-reviewer-smoke.svc:8080/hooks/gitlab` |
 | Secret token | same as `GITLAB_WEBHOOK_SECRET` |
-| Trigger | Merge request events |
+| Trigger | **Merge request events** and **Comments** |
 
-Use **Test → Merge request events** once; expect HTTP 2xx and a line in trigger logs.
+Use **Test → Merge request events** once; expect HTTP 2xx and a line in trigger logs. Confirm the review note author is `@rgctl-bot`. Optionally comment `@rgctl-bot review` / `@rgctl-bot explain …` to exercise mentions.
 
 Public Route (`oc -n pr-reviewer-smoke get route pr-reviewer-trigger` → `https://…/hooks/gitlab`) is optional and often flakier for in-cluster GitLab.
 

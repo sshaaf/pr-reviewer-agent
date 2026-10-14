@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from github_auth import github_api, installation_token
-from github_intents import (
+from mention_intents import (
     FIX_REFUSE_MESSAGE,
     has_mention,
     parse_intent,

@@ -35,12 +35,22 @@ oc -n pr-reviewer create secret generic pr-reviewer-secrets \
   --from-literal=OPENAI_MODEL='gpt-4o' \
   --from-literal=OPENCODE_SERVER_PASSWORD='pick-a-strong-password' \
   --from-literal=GITLAB_TOKEN='glpat-...' \
+  --from-literal=GITLAB_BOT_USERNAME='rgctl-bot' \
   --from-literal=GITLAB_WEBHOOK_SECRET='shared-webhook-secret'
 ```
 
 Set `LLM_PROVIDER=openai` (or `OPENCODE_MODEL=openai/gpt-4o`) to use OpenAI instead of LiteLLM. Unused provider keys may be empty.
 
-`GITLAB_TOKEN` needs `api` + `read_repository` on target projects (project or group access token).
+### Named GitLab bot (required for UX parity)
+
+Do **not** use an administrator PAT. Create a dedicated identity (preferred: **service account** + PAT when your GitLab edition supports it; otherwise a dedicated user) with username e.g. `rgctl-bot`:
+
+1. Create `rgctl-bot` and add it to each demo project (Developer or Maintainer).
+2. Mint a personal/project-scoped token with **`api`** + **`read_repository`**.
+3. Set `GITLAB_TOKEN` to that token and `GITLAB_BOT_USERNAME=rgctl-bot` (ConfigMap default is also `rgctl-bot`).
+4. Review notes and `@rgctl-bot` replies will appear as that user.
+
+Mentions: `@rgctl-bot`, `@rgctl-bot review`, `@rgctl-bot explain …`, `@rgctl-bot fix` (soft refuse). WIP/draft MRs skip auto-review; an explicit `@rgctl-bot review` still runs.
 
 ## 2. Point at in-cluster GitLab
 
@@ -86,9 +96,11 @@ In the GitLab project → **Settings → Webhooks**:
 |-------|--------|
 | URL | `https://<trigger-route-host>/hooks/gitlab` |
 | Secret token | same as `GITLAB_WEBHOOK_SECRET` |
-| Trigger | Merge request events |
+| Trigger | **Merge request events** and **Comments** |
 
 If GitLab cannot reach the public Route, use an in-cluster URL from a GitLab sidekiq/network policy perspective, or expose the trigger Service via a hostname GitLab can resolve.
+
+**Verify bot UX:** open a non-WIP MR → note author is `@rgctl-bot`; comment `@rgctl-bot explain …` → short reply; `@rgctl-bot fix` → read-only refuse.
 
 ## 5. Smoke / verify
 
