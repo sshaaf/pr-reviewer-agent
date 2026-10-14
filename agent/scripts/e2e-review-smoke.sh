@@ -188,7 +188,26 @@ BRANCH="smoke/pr-review-${RANDOM}"
 git checkout -B "${BRANCH}" "origin/${DEFAULT_BRANCH}"
 trace "Branch ${BRANCH} from origin/${DEFAULT_BRANCH}"
 
-# ── 2. Mutate a service + commit ────────────────────────────────────────────
+# ── 2. Seed policy + REVIEW.md / AGENTS.md (fixture overlay), mutate, commit ───
+SEED_DIR="${AGENT_DIR}/fixtures/coolstore-seed"
+if [ -d "${SEED_DIR}" ]; then
+  cp -f "${SEED_DIR}/policy.json" "${REPO_DIR}/policy.json"
+  cp -f "${SEED_DIR}/REVIEW.md" "${REPO_DIR}/REVIEW.md"
+  cp -f "${SEED_DIR}/AGENTS.md" "${REPO_DIR}/AGENTS.md"
+  git add policy.json REVIEW.md AGENTS.md
+  if ! git diff --cached --quiet; then
+    git -c user.email=e2e@pr-reviewer.local -c user.name='E2E Smoke' \
+      -c commit.gpgsign=false commit --no-gpg-sign \
+      -m "e2e: seed policy.json + REVIEW.md + AGENTS.md"
+  fi
+  trace "Seeded coolstore policy + REVIEW.md + AGENTS.md from ${SEED_DIR}"
+else
+  trace "WARN: seed dir missing at ${SEED_DIR}"
+fi
+[ -f "${REPO_DIR}/REVIEW.md" ] || die "expected REVIEW.md in coolstore fixture after seed"
+[ -f "${REPO_DIR}/AGENTS.md" ] || die "expected AGENTS.md in coolstore fixture after seed"
+[ -f "${REPO_DIR}/policy.json" ] || die "expected policy.json in coolstore fixture after seed"
+
 TARGET="src/main/java/com/redhat/coolstore/service/ShippingService.java"
 [ -f "${TARGET}" ] || die "expected ${TARGET} in coolstore fixture"
 printf '\n// e2e-smoke marker %s\n' "$(date +%s)" >>"${TARGET}"
@@ -300,6 +319,8 @@ Load skill rgctl-pr-reviewer-v2 and execute it.
 Repository root is /app/repo (REPO_PATH). Run all git and rgctl commands there.
 Do not post to GitHub/GitLab. Use output_mode session / skip_post true.
 Keep scratch JSON under /app/repo/.rgctl/ (not /tmp).
+Resolve policy from Input policy_json or /app/repo/policy.json and run rgctl review check --bisect.
+Also read REVIEW.md and AGENTS.md if they apply to the ShippingService change (soft Concerns only).
 
 First write /app/repo/IMPACT_REPORT.md with these exact headings in order:
 # Impact Report
@@ -462,6 +483,18 @@ if [ -f "${RUN_DIR}/IMPACT_REPORT.md" ]; then
     echo "OK: impact mermaid fence" | tee -a "${RUN_DIR}/assert.txt"
   else
     echo "FAIL: impact mermaid fence" | tee -a "${RUN_DIR}/assert.txt"
+    impact_fail=1
+    fail=1
+  fi
+  # Policy seed is always applied above — Findings must not say unconfigured.
+  if grep -Eqi 'no policy configured' "${RUN_DIR}/IMPACT_REPORT.md"; then
+    echo "FAIL: impact Policy Findings says no policy configured (policy.json was seeded)" | tee -a "${RUN_DIR}/assert.txt"
+    impact_fail=1
+    fail=1
+  elif grep -Fq "## Policy Findings" "${RUN_DIR}/IMPACT_REPORT.md"; then
+    echo "OK: impact Policy Findings present and configured" | tee -a "${RUN_DIR}/assert.txt"
+  else
+    echo "FAIL: impact ## Policy Findings missing" | tee -a "${RUN_DIR}/assert.txt"
     impact_fail=1
     fail=1
   fi

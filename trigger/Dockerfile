@@ -1,5 +1,6 @@
-# GitLab webhook trigger — same toolchain as agent (git + rgctl) + Python.
+# Webhook trigger (GitLab or GitHub App) — git + rgctl + Python.
 # Prefer linux/amd64.
+# TRIGGER_PROVIDER=gitlab|github selects entrypoint.
 ARG RGCTL_VERSION=v0.4.19
 ARG RGCTL_REPO=sshaaf/rgctl
 
@@ -13,9 +14,9 @@ USER root
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       ca-certificates curl tar git python3 \
+       ca-certificates curl tar git python3 openssl \
   && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /app/scripts /workspace \
+  && mkdir -p /app/scripts /app/trigger /workspace \
   && chown -R 1001:0 /app /workspace \
   && chmod -R g+rwX /app /workspace \
   && chmod 1777 /tmp
@@ -35,11 +36,19 @@ RUN set -e; \
   /usr/local/libexec/rgctl --version
 
 COPY --chown=1001:0 trigger/app.py /app/trigger/app.py
+COPY --chown=1001:0 trigger/github_app.py /app/trigger/github_app.py
+COPY --chown=1001:0 trigger/github_auth.py /app/trigger/github_auth.py
+COPY --chown=1001:0 trigger/mention_intents.py /app/trigger/mention_intents.py
+COPY --chown=1001:0 trigger/github_intents.py /app/trigger/github_intents.py
+COPY --chown=1001:0 trigger/entrypoint.sh /app/trigger/entrypoint.sh
 COPY --chown=1001:0 agent/scripts/review-workspace.sh /app/scripts/review-workspace.sh
 COPY --chown=1001:0 agent/scripts/post-inline-comments.sh /app/scripts/post-inline-comments.sh
+COPY --chown=1001:0 agent/scripts/resolve-policy.sh /app/scripts/resolve-policy.sh
 COPY --chown=1001:0 agent/scripts/rgctl-wrapper.sh /usr/local/bin/rgctl
 RUN chmod +x /app/scripts/review-workspace.sh /app/scripts/post-inline-comments.sh \
-      /app/trigger/app.py /usr/local/bin/rgctl \
+      /app/scripts/resolve-policy.sh \
+      /app/trigger/entrypoint.sh \
+      /app/trigger/app.py /app/trigger/github_app.py /usr/local/bin/rgctl \
   && rgctl --version
 
 ENV HOME=/tmp
@@ -47,6 +56,8 @@ ENV WORKSPACE=/workspace/repo
 ENV REVIEW_WORKSPACE_SCRIPT=/app/scripts/review-workspace.sh
 ENV LISTEN_PORT=8080
 ENV AGENT_URL=http://127.0.0.1:4096
+ENV TRIGGER_PROVIDER=gitlab
+ENV PYTHONPATH=/app/trigger
 # Soft RSS + Rayon thread cap for discover (override via ConfigMap/Secret).
 ENV RGCTL_WITH_LIMITS=max-mem-mb=1536,threads=1
 
@@ -54,4 +65,4 @@ USER 1001
 EXPOSE 8080
 WORKDIR /app
 
-ENTRYPOINT ["python3", "/app/trigger/app.py"]
+ENTRYPOINT ["/app/trigger/entrypoint.sh"]

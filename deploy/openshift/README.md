@@ -4,6 +4,8 @@ Runs OpenCode (`pr-reviewer-agent`) and a GitLab MR webhook trigger as **two con
 
 **Live demos / workshops:** follow **[docs/demo-runbook.md](../../docs/demo-runbook.md)** (smoke overlay, timed script, recovery). This README is the ops install sheet.
 
+**GitHub App** (auto-review + `@mention`, read-only): **[docs/github-app.md](../../docs/github-app.md)** and overlay `deploy/openshift/overlays/github` (`TRIGGER_PROVIDER=github`, webhook `POST /hooks/github`).
+
 ```
 GitLab (on OpenShift) --webhook--> Route --> trigger:8080
                                               | clone + rgctl discover
@@ -33,12 +35,22 @@ oc -n pr-reviewer create secret generic pr-reviewer-secrets \
   --from-literal=OPENAI_MODEL='gpt-4o' \
   --from-literal=OPENCODE_SERVER_PASSWORD='pick-a-strong-password' \
   --from-literal=GITLAB_TOKEN='glpat-...' \
+  --from-literal=GITLAB_BOT_USERNAME='rgctl-bot' \
   --from-literal=GITLAB_WEBHOOK_SECRET='shared-webhook-secret'
 ```
 
 Set `LLM_PROVIDER=openai` (or `OPENCODE_MODEL=openai/gpt-4o`) to use OpenAI instead of LiteLLM. Unused provider keys may be empty.
 
-`GITLAB_TOKEN` needs `api` + `read_repository` on target projects (project or group access token).
+### Named GitLab bot (required for UX parity)
+
+Do **not** use an administrator PAT. Create a dedicated identity (preferred: **service account** + PAT when your GitLab edition supports it; otherwise a dedicated user) with username e.g. `rgctl-bot`:
+
+1. Create `rgctl-bot` and add it to each demo project (Developer or Maintainer).
+2. Mint a personal/project-scoped token with **`api`** + **`read_repository`**.
+3. Set `GITLAB_TOKEN` to that token and `GITLAB_BOT_USERNAME=rgctl-bot` (ConfigMap default is also `rgctl-bot`).
+4. Review notes and `@rgctl-bot` replies will appear as that user.
+
+Mentions: `@rgctl-bot`, `@rgctl-bot review`, `@rgctl-bot explain …`, `@rgctl-bot fix` (soft refuse). WIP/draft MRs skip auto-review; an explicit `@rgctl-bot review` still runs.
 
 ## 2. Point at in-cluster GitLab
 
@@ -52,10 +64,21 @@ Use your GitLab Operator/Helm Service name and port (`oc -n gitlab get svc`).
 
 ## 3. Apply
 
-```bash
-# Dry-run (no cluster required for client-side validate if using kustomize)
-kubectl kustomize deploy/openshift
+Standard sizing profile (baked into `base/`, enforced by `deploy.sh`):
 
+| Setting | Value |
+|---------|--------|
+| agent + trigger limits | **4 CPU / 4Gi** (requests 500m / 1Gi) |
+| `RGCTL_WITH_LIMITS` | **`max-mem-mb=3072,threads=4`** |
+
+```bash
+# Preferred — applies overlay and verifies the profile on the live pod
+./deploy/openshift/deploy.sh              # base → ns pr-reviewer
+./deploy/openshift/deploy.sh smoke        # overlays/smoke
+./deploy/openshift/deploy.sh github       # overlays/github
+./deploy/openshift/deploy.sh --dry-run smoke
+
+# Equivalent manual apply (profile still comes from base manifests)
 oc apply -k deploy/openshift
 oc -n pr-reviewer rollout status deploy/pr-reviewer
 ```
@@ -73,9 +96,11 @@ In the GitLab project → **Settings → Webhooks**:
 |-------|--------|
 | URL | `https://<trigger-route-host>/hooks/gitlab` |
 | Secret token | same as `GITLAB_WEBHOOK_SECRET` |
-| Trigger | Merge request events |
+| Trigger | **Merge request events** and **Comments** |
 
 If GitLab cannot reach the public Route, use an in-cluster URL from a GitLab sidekiq/network policy perspective, or expose the trigger Service via a hostname GitLab can resolve.
+
+**Verify bot UX:** open a non-WIP MR → note author is `@rgctl-bot`; comment `@rgctl-bot explain …` → short reply; `@rgctl-bot fix` → read-only refuse.
 
 ## 5. Smoke / verify
 
@@ -98,6 +123,8 @@ oc -n pr-reviewer exec deploy/pr-reviewer -c agent -- printenv RGCTL_WITH_LIMITS
 
 **End-to-end:** open or update an MR on a watched project → trigger logs show clone/discover/`prompt_async` → MR gains a notes comment with the four-section review; workspace contains `IMPACT_REPORT.md` under `/workspace/repo`.
 
+If the cloned repo has root `policy.json` or `.rgctl/policy.json`, the trigger loads it into Input `policy_json` and the skill runs `rgctl review check --bisect` (Policy Findings in the Impact Report). `REVIEW.md` and `AGENTS.md` (repo root or `docs/`) are consulted for soft Guidelines Concerns only.
+
 ```bash
 oc -n pr-reviewer logs -f deploy/pr-reviewer -c trigger
 oc -n pr-reviewer logs -f deploy/pr-reviewer -c agent
@@ -105,7 +132,7 @@ oc -n pr-reviewer logs -f deploy/pr-reviewer -c agent
 
 ## Resource notes
 
-Defaults in base manifests: agent/trigger **2 CPU / 3Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=2048,threads=1` (`max-mem-mb` soft RSS + `threads` Rayon cap on every `rgctl discover`). Raise pod memory and the spec together for large repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
+Defaults in base manifests: agent/trigger **4 CPU / 4Gi**, `RGCTL_WITH_LIMITS=max-mem-mb=3072,threads=4` (`max-mem-mb` soft RSS + `threads` Rayon cap on every `rgctl discover`). Keep `max-mem-mb` under the container limit with headroom; raise both together for larger repos. Reviews are **serialized** in the trigger (one lock) to avoid clobbering the shared workspace.
 
 ## Optional agent Route
 

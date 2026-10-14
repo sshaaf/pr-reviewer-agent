@@ -64,10 +64,20 @@ Presenter runbook (timed script, prereqs, recovery): **[docs/demo-runbook.md](do
 See **[deploy/openshift/README.md](deploy/openshift/README.md)** for Secrets, `GITLAB_URL`, webhook registration, and verify steps. For a live workshop path, use the [demo runbook](docs/demo-runbook.md) (smoke overlay).
 
 ```bash
-oc apply -k deploy/openshift
-# or smoke demo NS:
-oc apply -k deploy/openshift/overlays/smoke
+./deploy/openshift/deploy.sh              # base → pr-reviewer (4 CPU / 4Gi, max-mem-mb=3072,threads=4)
+./deploy/openshift/deploy.sh smoke        # workshop NS
 ```
+
+## GitHub App
+
+Read-only GitHub App ingress (auto PR review + `@mention`): **[docs/github-app.md](docs/github-app.md)**.
+
+```bash
+./deploy/openshift/deploy.sh github
+# Webhook URL: https://<trigger-route>/hooks/github
+```
+
+Fix PRs / Contents: write are **out of scope** for v1 (soft-refuse on `@bot fix`).
 
 ## Skill Input JSON
 

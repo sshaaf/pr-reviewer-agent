@@ -3,6 +3,8 @@
 Audience: workshop facilitators and SAs presenting the agent live.  
 Ops install details stay in [`deploy/openshift/README.md`](../deploy/openshift/README.md). Skill format details stay in [`agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md`](../agent/.opencode/skills/rgctl-pr-reviewer-v2/SKILL.md).
 
+**GitHub App** (auto + `@mention`, read-only): see [`docs/github-app.md`](github-app.md) — separate from this GitLab smoke path.
+
 ---
 
 ## 1. Story (30 seconds)
@@ -21,7 +23,7 @@ Complete this checklist **before** anyone joins the call.
 
 - [ ] `oc` logged into a cluster with rights to create namespace `pr-reviewer-smoke` (or equivalent)
 - [ ] Can pull `quay.io/sshaaf/pr-reviewer-agent:latest` (or mirror + ImageStream)
-- [ ] Quota for one reviewer pod: roughly **2 CPU / 3Gi** per container (agent + trigger), requests lower — see base Deployment
+- [ ] Quota for one reviewer pod: **4 CPU / 4Gi** per container (agent + trigger), requests 500m / 1Gi — see base Deployment / `deploy/openshift/deploy.sh`
 - [ ] Optional: SCC / anyuid notes only if restricted SCC blocks the pod; prefer default restricted-v2 if it works
 
 ### GitLab (in-cluster)
@@ -72,8 +74,11 @@ oc -n "$NS" create secret generic pr-reviewer-secrets \
   --from-literal=OPENAI_MODEL='gpt-4o' \
   --from-literal=OPENCODE_SERVER_PASSWORD='pick-a-strong-password' \
   --from-literal=GITLAB_TOKEN='glpat-...' \
+  --from-literal=GITLAB_BOT_USERNAME='rgctl-bot' \
   --from-literal=GITLAB_WEBHOOK_SECRET='shared-webhook-secret'
 ```
+
+`GITLAB_TOKEN` MUST be a **named bot** PAT (e.g. user/service account `rgctl-bot` with `api` + `read_repository`) — not an administrator account — so MR notes show as `@rgctl-bot`.
 
 For OpenAI-first demos, set `LLM_PROVIDER=openai` and a real `OPENAI_API_KEY` (LiteLLM keys may be empty). See [`deploy/openshift/secret-example.yaml`](../deploy/openshift/secret-example.yaml).
 
@@ -96,8 +101,8 @@ oc -n "$NS" start-build pr-reviewer-trigger --from-dir=. --follow
 ### 3.3 Apply overlay
 
 ```bash
-oc apply -k deploy/openshift/overlays/smoke
-oc -n pr-reviewer-smoke rollout status deploy/pr-reviewer
+./deploy/openshift/deploy.sh smoke
+# (applies overlays/smoke and verifies 4 CPU / 4Gi + RGCTL_WITH_LIMITS=max-mem-mb=3072,threads=4)
 ```
 
 Confirm smoke ConfigMap `GITLAB_URL` is `http://gitlab.gitlab.svc` (or patch to your GitLab Service host/port).
@@ -116,7 +121,7 @@ oc -n pr-reviewer-smoke exec deploy/pr-reviewer -c trigger -- \
   curl -sf -u "opencode:${PASS}" http://127.0.0.1:4096/global/health
 
 oc -n pr-reviewer-smoke exec deploy/pr-reviewer -c agent -- printenv RGCTL_WITH_LIMITS
-# expect: max-mem-mb=2048,threads=1 (or your override)
+# expect: max-mem-mb=3072,threads=4 (or your override)
 ```
 
 ### 3.5 Register webhook (in-cluster)
@@ -133,17 +138,19 @@ In the GitLab **demo project** → Settings → Webhooks:
 |-------|--------|
 | URL | `http://pr-reviewer-trigger.pr-reviewer-smoke.svc:8080/hooks/gitlab` |
 | Secret token | same as `GITLAB_WEBHOOK_SECRET` |
-| Trigger | Merge request events |
+| Trigger | **Merge request events** and **Comments** |
 
-Use **Test → Merge request events** once; expect HTTP 2xx and a line in trigger logs.
+Use **Test → Merge request events** once; expect HTTP 2xx and a line in trigger logs. Confirm the review note author is `@rgctl-bot`. Optionally comment `@rgctl-bot review` / `@rgctl-bot explain …` to exercise mentions.
 
 Public Route (`oc -n pr-reviewer-smoke get route pr-reviewer-trigger` → `https://…/hooks/gitlab`) is optional and often flakier for in-cluster GitLab.
 
 ### 3.6 Demo project / MR seed
 
 - Import or mirror coolstore (or your fixture) into GitLab.
+- Ensure the project has root **`policy.json`**, **`REVIEW.md`**, and **`AGENTS.md`** (copy from [`agent/fixtures/coolstore-seed/`](../agent/fixtures/coolstore-seed/) if missing). The trigger auto-loads repo policy into the skill.
 - Open an MR with a **small, reviewable** change (e.g. tweak `ShippingService` shipping calc) so §3/§4 can cite real `path:line` in the diff.
 - Optional pre-warm: push once before the audience joins so `.rgctl-base` discover cost is partly paid (workspace is `emptyDir` — a pod restart clears it; still validates webhook + LLM).
+- **Policy RED demo:** widen shipping/cart coupling so blast impact exceeds `max_impact_nodes` (12 in the seed), or temporarily lower that limit in `policy.json` on the branch.
 
 ---
 
@@ -192,7 +199,8 @@ Use this as the on-screen checklist:
 |---------|--------|
 | **MR note — Verdict** | `## Verdict: 🟡 YELLOW — …` (emoji **and** the word GREEN / YELLOW / RED) |
 | **§§1–4** | High-level Summary → Call-Path & Architecture → Test Coverage → Line-by-Line (`path:line` bullets) |
-| **Guidelines** | Concerns / Blockers / Open questions / What’s fine (Blockers non-empty if RED) |
+| **Guidelines** | Concerns / Blockers / Open questions / What’s fine (Blockers non-empty if RED); may cite `REVIEW.md` / `AGENTS.md` |
+| **Policy Findings** | IMPACT / note must **not** say “No policy configured” when `policy.json` is in the repo |
 | **Changes tab** | Inline discussions for concrete §3/§4 findings on lines **in the MR diff** |
 | **Workspace** | `/workspace/repo/IMPACT_REPORT.md` with matching `## Verdict` + Mermaid + blast/communities/test handoff |
 
@@ -208,7 +216,7 @@ Verdict ladder (advisory): RED = policy new/regression, security/auth/PII/paymen
 |---------|--------------|----------|
 | No trigger logs on push | Webhook URL wrong; secret mismatch; GitLab blocks local requests | Re-test webhook; enable `allow_local_requests_from_web_hooks_and_services`; use `http://pr-reviewer-trigger.pr-reviewer-smoke.svc:8080/hooks/gitlab` |
 | Clone / auth errors | Bad `GITLAB_TOKEN` or URL | Token `api`+`read_repository`; ConfigMap `GITLAB_URL` matches in-cluster API |
-| Discover abort / OOM | Soft RSS tripwire or cgroup kill | Confirm `RGCTL_WITH_LIMITS=max-mem-mb=2048,threads=1`; raise pod memory **and** `max-mem-mb` together; smaller fixture if needed |
+| Discover abort / OOM | Soft RSS tripwire or cgroup kill | Confirm `RGCTL_WITH_LIMITS=max-mem-mb=3072,threads=4`; raise pod memory **and** `max-mem-mb` together; smaller fixture if needed |
 | Pod ImagePullBackOff | Quay / ImageStream lag | `oc -n pr-reviewer-smoke get is,bc`; rebuild trigger; check agent pull secret |
 | Long silence after discover | LLM latency / tool loop | Switch to OpenAI for the room; show agent logs; don’t restart mid-review unless stuck >30 min |
 | MR note but no Changes comments | Lines not in diff; helper skip | Findings must use **new-file** line numbers in the MR diff; re-push a clearer line-level change |
@@ -224,7 +232,7 @@ Verdict ladder (advisory): RED = policy new/regression, security/auth/PII/paymen
 ### Base overlay (non-smoke)
 
 ```bash
-oc apply -k deploy/openshift   # namespace pr-reviewer, Quay images as in base
+./deploy/openshift/deploy.sh   # namespace pr-reviewer, Quay images as in base
 ```
 
 Use when you are not on the smoke ImageStream path. Still prefer in-cluster webhook URLs.
@@ -240,8 +248,8 @@ Or set `OPENCODE_MODEL=openai/gpt-4o` in the secret (overrides provider selectio
 
 ### Resource defaults (smoke inherits base)
 
-- Agent / trigger limits: **2 CPU / 3Gi**
-- `RGCTL_WITH_LIMITS`: `max-mem-mb=2048,threads=1`
+- Agent / trigger limits: **4 CPU / 4Gi**
+- `RGCTL_WITH_LIMITS`: `max-mem-mb=3072,threads=4`
 - Reviews serialized in the trigger (shared `/workspace`)
 
 ### Related docs

@@ -65,9 +65,11 @@ COPY --chown=1001:0 agent/.opencode /app/.opencode
 COPY --chown=1001:0 agent/scripts/entrypoint.sh /app/scripts/entrypoint.sh
 COPY --chown=1001:0 agent/scripts/review-workspace.sh /app/scripts/review-workspace.sh
 COPY --chown=1001:0 agent/scripts/post-inline-comments.sh /app/scripts/post-inline-comments.sh
+COPY --chown=1001:0 agent/scripts/resolve-policy.sh /app/scripts/resolve-policy.sh
 COPY --chown=1001:0 agent/scripts/rgctl-wrapper.sh /usr/local/bin/rgctl
 RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/review-workspace.sh \
-      /app/scripts/post-inline-comments.sh /usr/local/bin/rgctl \
+      /app/scripts/post-inline-comments.sh /app/scripts/resolve-policy.sh \
+      /usr/local/bin/rgctl \
   && rgctl --version
 
 
